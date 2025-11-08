@@ -1,0 +1,208 @@
+﻿Attention : les données indiquées dans les colonnes H, I, J, K, L, M et N ne sont malheureusement pas nécessairement justes car elles dépendent de l'historique des mouvements des contrats qui a pu être récupéré et intégré dans notre outil. En effet, certains mouvements très anciens (reversements, rachats partiels...) n'ont peut-être pas pu être (encore) identifiés... Il en va aussi pour des mouvements très récents (comme des versements programmés...). Les données des colonnes H, I, J, K, L, M et N sont donc communiquées à titre purement informatif. Il convient donc de se référer aux données officielles accessibles sur les seules Extranets des partenaires (compagnies d’assurances…).
+Identifiant du contrat;Titulaire(s);Enveloppe;Contrat;Partenaire;N° de contrat;Valorisation;Montant total des versements bruts;Montant total des versements nets;Montant total des rachats bruts;Performance financière en % (perf du contrat);Performance financière en euros (perf du contrat);Performance pour le client en % (perf fiscale);Performance pour le client en euros (perf fiscale);Risque réel du contrat;Ouverture;Date de valorisation;Crédit;Agrégé auto;Consultant
+10459093;NAVARRO Jean-philippe;Assurance-vie;Cristalliance Evoluvie;Apicil Epargne;4060113;15 643,39;17 200,00;16 374,40;0,00;-4,46;-731,01;-9,05;-1 556,61;1.54;08/01/2021;02/09/2024;Non;Oui;NAVARRO Jean-Philippe
+10913429;MAGNAT Gontran;Assurance-vie;Cristalliance Evoluvie;Apicil Epargne;4061269;2 771,48;2 900,00;2 760,80;0,00;0,39;10,68;-4,43;-128,52;6.53;11/02/2021;19/09/2024;Non;Oui;NAVARRO Jean-Philippe
+10913438;MAGNAT Carine;Assurance-vie;Cristalliance Evoluvie;Apicil Epargne;4061270;2 917,20;3 050,00;2 903,60;0,00;0,47;13,60;-4,35;-132,80;0;11/02/2021;13/09/2024;Non;Oui;NAVARRO Jean-Philippe
+11070066;MAGNAT nathan;Assurance-vie;Cristalliance Evoluvie;Apicil Epargne;4063129;4 301,13;4 550,00;4 331,60;0,00;-0,70;-30,47;-5,47;-248,87;0;19/03/2021;20/09/2024;Non;Oui;NAVARRO Jean-Philippe
+11070072;MAGNAT Jade;Assurance-vie;Cristalliance Evoluvie;Apicil Epargne;4063162;4 301,13;4 550,00;4 331,60;0,00;-0,70;-30,47;-5,47;-248,87;0;19/03/2021;20/09/2024;Non;Oui;NAVARRO Jean-Philippe
+11093221;NAVARRO Claire;Assurance-vie;Cristalliance Evoluvie;Apicil Epargne;4063675;15 865,33;17 000,00;16 184,00;0,00;-1,97;-318,67;-6,67;-1 134,67;7.87;29/03/2021;02/09/2024;Non;Oui;NAVARRO Jean-Philippe
+11273303;CALMET Jean-marc;PER;Le PER Eres;Eres;0010494244001-Le PER Eres;7 161,20;6 120,00;5 826,24;7 167,39;0,00;;0,00;;6.97;;09/05/2023;Non;Oui;NAVARRO Jean-Philippe
+11324400;ROUCHOUSE Laure;PEA PME;INTENCIAL Initiatives PEA PME;GRESHAM Banque;1412000001000208155;19 022,15;20 240,00;20 240,00;0,00;-6,02;-1 217,85;-6,02;-1 217,85;0;22/10/2020;13/01/2023;Non;Oui;NAVARRO Jean-Philippe
+11377901;SOMMERER Stéphanie;Assurance-vie;Cristalliance Evoluvie;Apicil Epargne;4070981;9 628,09;10 000,00;9 520,00;0,00;1,14;108,09;-3,72;-371,91;0.9;16/09/2021;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+11382821;SOMMERER Yannick;Assurance-vie;Cristalliance Evoluvie;Apicil Epargne;4071094;9 628,12;10 000,00;9 520,00;0,00;1,14;108,12;-3,72;-371,88;0.9;20/09/2021;02/09/2024;Non;Oui;NAVARRO Jean-Philippe
+11399904;ROUCHOUSE Laure;PEA;PEA;Patrimoine;;7 500,00;0,00;0,00;0,00;0,00;;0,00;;0;;08/11/2023;Non;Non;LEBORGNE Frédéric
+11399905;ROUCHOUSE Laure;Assurance-vie;Assurance-vie;Patrimoine;;70 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;08/11/2023;Non;Non;LEBORGNE Frédéric
+11399906;ROUCHOUSE Laure;Plan d'Epargne Entreprise PEE;PEE;Patrimoine;;60 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;08/11/2023;Non;Non;LEBORGNE Frédéric
+11399907;ROUCHOUSE Laure;Livret de Développement Durable;Livret de Développement Durable LDD;Patrimoine;;6 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;25/09/2021;Non;Non;LEBORGNE Frédéric
+11399908;ROUCHOUSE Laure;Livret A;Livret A;Patrimoine;;22 700,00;0,00;0,00;0,00;0,00;;0,00;;0;;25/09/2021;Non;Non;LEBORGNE Frédéric
+11399909;ROUCHOUSE Laure;Compte titres;Compte titre (CTO) PARTS SOCIALES;Patrimoine;;400,00;0,00;0,00;0,00;0,00;;0,00;;0;;08/11/2023;Non;Non;LEBORGNE Frédéric
+11399910;ROUCHOUSE Laure;Résidence Secondaire;Résidence Secondaire;Patrimoine;;60 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;25/09/2021;Non;Non;LEBORGNE Frédéric
+11399911;ROUCHOUSE Laure;Résidence Secondaire;Résidence Secondaire;Patrimoine;;78 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;25/09/2021;Non;Non;LEBORGNE Frédéric
+11399912;ROUCHOUSE Laure;Résidence Principale;Résidence principale;Patrimoine;;270 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;08/11/2023;Oui;Non;LEBORGNE Frédéric
+11416411;URIZ-JAUREGUI Fermin;Assurance-vie;Cristalliance Evoluvie;Apicil Epargne;4071486;8 016,30;8 360,00;7 958,40;0,00;0,73;57,90;-4,11;-343,70;5.88;27/09/2021;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+11469151;NAVARRO Jean-philippe;Fip Outre Mer;FIP Outre Mer Inter Invest N°1;Inter Invest;5376;5 360,00;0,00;0,00;0,00;0,00;;0,00;;0;;30/06/2021;Non;Oui;NAVARRO Jean-Philippe
+11469152;NAVARRO Jean-philippe;Fip Outre Mer;FIP Outre Mer Inter Invest N°2;Inter Invest;7867;7 520,00;0,00;0,00;0,00;0,00;;0,00;;0;;30/06/2021;Non;Oui;NAVARRO Jean-Philippe
+11636679;VERCOUTRE Mélissa;PER;Pertinence Retraite;Vie Plus;268965030;6 167,43;6 500,00;6 207,50;0,00;-0,65;-40,07;-5,12;-332,57;2;30/11/2021;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+11636680;VERCOUTRE Matis;PER;Pertinence Retraite;Vie Plus;268965292;6 294,85;6 500,00;6 207,50;0,00;1,41;87,35;-3,16;-205,15;0;30/11/2021;13/09/2024;Non;Oui;NAVARRO Jean-Philippe
+11636866;LICENSE Olivier;Assurance-vie;Cristalliance Avenir;SURAVENIR;269197960;47 523,35;50 001,00;48 200,96;0,00;-1,41;-677,61;-4,96;-2 477,65;0;05/02/2022;20/09/2024;Non;Oui;NAVARRO Jean-Philippe
+11637892;SOMMERER Nicolas;PER;Pertinence Retraite;Vie Plus;268991276;21 982,87;22 000,00;21 010,00;0,00;4,63;972,87;-0,08;-17,13;15.56;07/12/2021;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+11644595;GELIS Céline;Assurance-vie;Cristalliance Avenir;SURAVENIR;269218752;47 169,77;50 001,00;48 200,96;0,00;-2,14;-1 031,19;-5,66;-2 831,23;1.92;14/02/2022;16/09/2024;Non;Oui;NAVARRO Jean-Philippe
+11759540;SOMMERER Odile;Assurance-vie;Cristalliance Evoluvie;Apicil Epargne;4081186;9 673,96;9 850,00;9 377,20;0,00;3,16;296,76;-1,79;-176,04;0;12/04/2022;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+12664896;MAGNAT Carine;Livret Classique;Livret Classique;Patrimoine;;11 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12664966;BRIOT Jean;Classique;Immobilier locatif classique;Patrimoine;;100 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12665006;TORTOCHAUX Damien,TORTOCHAUX Luce;Compte Courant;Compte courant;Patrimoine;;2 200,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+12665040;SOMMERER Stéphanie,SOMMERER Yannick;Livret Classique;Livret Classique;Patrimoine;;130 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;12/03/2024;Non;Non;NAVARRO Jean-Philippe
+12665067;COMBES Céline;Compte à Terme;Compte à terme (CAT);Patrimoine;;40 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12665570;POUCHADON Valérie,POUCHADON Florent;Classique;Immobilier locatif classique;Patrimoine;;700 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;04/07/2022;Oui;Non;NAVARRO Jean-Philippe
+12665575;MAGNAT Gontran,MAGNAT Carine;Résidence Principale;Résidence principale;Patrimoine;;350 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Oui;Non;NAVARRO Jean-Philippe
+12665864;TORTOCHAUX Damien;Assurance-vie;Assurance-vie;Patrimoine;;163 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+12665881;VERCOUTRE Isabelle;Compte Courant;Compte courant;Patrimoine;;91 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/02/2024;Non;Non;NAVARRO Jean-Philippe
+12666046;NAVARRO Jean-philippe,NAVARRO Claire;PEA PME;PEA PME;Patrimoine;;23 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;26/03/2023;Non;Non;NAVARRO Jean-Philippe
+12666474;POUCHADON Florent,POUCHADON Valérie;Compte Courant;Compte courant;Patrimoine;;60 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12666494;TORTOCHAUX Damien,TORTOCHAUX Luce;Classique;Immobilier locatif classique;Patrimoine;;550 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Oui;Non;NAVARRO Jean-Philippe
+12666900;CALMET Sylvie;Livret Classique;Livret Classique;Patrimoine;;53 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+12667148;SOMMERER Yannick,SOMMERER Stéphanie;Classique;Immobilier locatif classique;Patrimoine;;450 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;12/03/2024;Non;Non;NAVARRO Jean-Philippe
+12667165;NAVARRO Emilie,NAVARRO Camille;Assurance-vie;Assurance-vie;Patrimoine;;77 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;04/09/2023;Non;Non;NAVARRO Jean-Philippe
+12667275;COMBES Céline;Classique;Immobilier locatif classique;Patrimoine;;75 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12667488;TORTOCHAUX Damien,TORTOCHAUX Luce;Classique;Immobilier locatif classique;Patrimoine;;550 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+12667906;TORTOCHAUX Damien;Compte Courant;Compte courant;Patrimoine;;14 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+12668002;NAVARRO Claire;Compte Epargne Logement CEL;Compte Epargne Logement (CEL);Patrimoine;;3 780,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12668498;NAVARRO Claire,NAVARRO Jean-philippe;Livret Classique;Livret Classique;Patrimoine;;42 916,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12668917;MAGNAT Gontran;Livret Classique;Livret Classique;Patrimoine;;11 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12669121;MAGNAT Gontran,MAGNAT Carine;Assurance-vie;Assurance-vie;Patrimoine;;3 000,00;0,00;0,00;0,00;0,00;;0,00;;0;01/01/2010;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12669483;SOMMERER Stéphanie,SOMMERER Yannick;Assurance-vie;Assurance-vie;Patrimoine;;10 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12669664;NAVARRO Claire,NAVARRO Jean-philippe;Loi Scellier;Scellier;Patrimoine;;163 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;26/03/2023;Oui;Non;NAVARRO Jean-Philippe
+12669922;TORTOCHAUX Damien;Livret Classique;Livret Classique;Patrimoine;;47 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+12670346;TORTOCHAUX Damien,TORTOCHAUX Luce;Classique;Immobilier locatif classique;Patrimoine;;350 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Oui;Non;NAVARRO Jean-Philippe
+12670698;VERCOUTRE Isabelle,VERCOUTRE Olivier;Classique;Immobilier locatif classique;Patrimoine;;550 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12670991;SOMMERER Nicolas;PEA;PEA;Patrimoine;;1 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;01/12/2022;Non;Non;NAVARRO Jean-Philippe
+12671909;CALMET Jean-marc;Classique;Immobilier locatif classique;Patrimoine;;300 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+12672070;CALMET Sylvie;Assurance-vie;Assurance-vie;Patrimoine;;50 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+12672093;CALMET Sylvie;PERP;PERP;Patrimoine;;29 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+12672868;SOMMERER Nicolas;Résidence Principale;Résidence principale;Patrimoine;;112 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;30/11/2022;Non;Non;NAVARRO Jean-Philippe
+12673272;ALIOS-DUPLAT Emmanuelle;Assurance-vie;Assurance-vie;Patrimoine;;12 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12673451;SOMMERER Odile;Livret Classique;Livret Classique;Patrimoine;;12 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12673964;ALIOS-DUPLAT Emmanuelle;Livret Classique;Livret Classique;Patrimoine;;15 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12674112;POUCHADON Florent,POUCHADON Valérie;Livret Classique;Livret Classique;Patrimoine;;50 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12674776;LICENSE Olivier,GELIS Céline;Livret Classique;Livret Classique;Patrimoine;;42 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12675234;BRIOT Jean,BRIOT Lorna;Livret Classique;Livret Classique;Patrimoine;;27 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12675415;LAEMMLIN Laurie;Compte Courant;Compte courant;Patrimoine;;7 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12675419;NAVARRO Emilie,NAVARRO Camille;Classique;Immobilier locatif classique;Patrimoine;;462 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12676272;NAVARRO Emilie,NAVARRO Camille;Classique;Immobilier locatif classique;Patrimoine;;650 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;04/09/2023;Non;Non;NAVARRO Jean-Philippe
+12677144;NAVARRO Camille,NAVARRO Emilie;Classique;Immobilier locatif classique;Patrimoine;;400 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12677434;COMBES Céline;Assurance-vie;Assurance-vie;Patrimoine;;65 700,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12677642;NAVARRO Jean-philippe;Livret A;Livret A;Patrimoine;;9 429,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12678458;SOMMERER Odile;Classique;Immobilier locatif classique;Patrimoine;;280 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;09/07/2022;Oui;Non;NAVARRO Jean-Philippe
+12678614;NAVARRO Emilie,NAVARRO Camille;Livret Classique;Livret Classique;Patrimoine;;86 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;02/11/2023;Non;Non;NAVARRO Jean-Philippe
+12678711;TORTOCHAUX Luce;Assurance-vie;Assurance-vie;Patrimoine;;22 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+12679212;TORTOCHAUX Damien;Plan d'Epargne Entreprise PEE;PEE;Patrimoine;;6 100,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+12679245;ALIOS-DUPLAT Emmanuelle;PEA;PEA;Patrimoine;;15 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12679376;NAVARRO Jean-philippe;Livret de Développement Durable;Livret de Développement Durable LDD;Patrimoine;;3 079,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12680229;LAEMMLIN Laurie;Livret A;Livret A;Patrimoine;;22 500,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12680375;NAVARRO Claire;Livret A;Livret A;Patrimoine;;10 064,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12680440;VERCOUTRE Isabelle;Livret Classique;Livret Classique;Patrimoine;;45 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/02/2024;Non;Non;NAVARRO Jean-Philippe
+12680685;NAVARRO Jean-philippe,NAVARRO Claire;Résidence Principale;Résidence principale;Patrimoine;;640 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;26/03/2023;Oui;Non;NAVARRO Jean-Philippe
+12681124;NAVARRO Jean-philippe;Compte Epargne Logement CEL;Compte Epargne Logement (CEL);Patrimoine;;4 301,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12682707;URIZ-JAUREGUI Fermin;Livret Classique;Livret Classique;Patrimoine;;35 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12682870;ALIOS-DUPLAT Emmanuelle;Résidence Principale;Résidence principale;Patrimoine;;450 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12683379;SOMMERER Nicolas;Livret Classique;Livret Classique;Patrimoine;;21 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;29/11/2022;Non;Non;NAVARRO Jean-Philippe
+12683875;COMBES Céline;Compte titres;Compte titre (CTO) PARTS SOCIALES;Patrimoine;;10 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12684127;LICENSE Olivier,GELIS Céline;Résidence Principale;Résidence principale;Patrimoine;;829 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;12/12/2022;Oui;Non;NAVARRO Jean-Philippe
+12684140;SOMMERER Nicolas;Classique;Immobilier locatif classique;Patrimoine;;80 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12684629;TORTOCHAUX Luce;Plan d'Epargne Entreprise PEE;PEE;Patrimoine;;32 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+12684694;COMBES Céline;Livret Classique;Livret Classique;Patrimoine;;86 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12685020;GELIS Céline;Assurance-vie;Assurance-vie;Patrimoine;;11 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12685328;SOMMERER Nicolas;Compte Courant;Compte courant;Patrimoine;;45 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;01/12/2022;Non;Non;NAVARRO Jean-Philippe
+12685408;BRIOT Lorna,BRIOT Jean;Classique;Immobilier locatif classique;Patrimoine;;400 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;04/07/2022;Oui;Non;NAVARRO Jean-Philippe
+12685426;SOMMERER Odile;Plan d'Epargne Entreprise PEE;PEE;Patrimoine;;850,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12685487;NAVARRO Claire;Livret de Développement Durable;Livret de Développement Durable LDD;Patrimoine;;3 395,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12685546;TORTOCHAUX Luce;Livret Classique;Livret Classique;Patrimoine;;45 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+12685687;VERCOUTRE Mélissa;Livret Classique;Livret Classique;Patrimoine;;23 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/02/2024;Non;Non;NAVARRO Jean-Philippe
+12686149;LAEMMLIN Laurie;Plan d'Epargne Logement PEL;Plan d'Epargne Logement (PEL);Patrimoine;;14 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12686182;COMBES Céline;Plan d'Epargne Logement PEL;Plan d'Epargne Logement (PEL);Patrimoine;;66 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12687149;URIZ-JAUREGUI Fermin;Compte Courant;Compte courant;Patrimoine;;15 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12687635;CALMET Sylvie;Plan d'Epargne Entreprise PEE;PEE;Patrimoine;;25 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+12688135;ALIOS-DUPLAT Emmanuelle;Compte Courant;Compte courant;Patrimoine;;100 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;17/06/2022;Non;Non;NAVARRO Jean-Philippe
+12688157;SOMMERER Odile;Livret A;Livret A;Patrimoine;;23 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;10/07/2022;Non;Non;NAVARRO Jean-Philippe
+12688597;TORTOCHAUX Luce;Compte Courant;Compte courant;Patrimoine;;2 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+12747828;TORTOCHAUX Damien;Assurance-vie;Cristalliance Avenir;SURAVENIR;269549963;49 111,61;50 001,00;48 200,95;0,00;1,89;910,66;-1,78;-889,39;6.89;01/06/2022;31/08/2024;Non;Oui;NAVARRO Jean-Philippe
+12749948;TORTOCHAUX Luce;Assurance-vie;Cristalliance Avenir;SURAVENIR;269595215;49 010,78;50 001,00;48 200,95;0,00;1,68;809,83;-1,98;-990,22;6.2;22/06/2022;24/09/2024;Non;Oui;NAVARRO Jean-Philippe
+12757901;SOMMERER Odile;Compte Courant;Compte courant;Patrimoine;;22 300,00;0,00;0,00;0,00;0,00;;0,00;;0;;09/07/2022;Non;Non;NAVARRO Jean-Philippe
+12803349;LAEMMLIN Laurie;Assurance-vie;Cristalliance Avenir;SURAVENIR;269640380;18 599,94;20 000,00;19 040,00;0,00;-2,31;-440,06;-7,00;-1 400,06;1.51;14/07/2022;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+12803660;SABATIER Pascale;Classique;Immobilier locatif classique;Patrimoine;;140 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;22/08/2022;Non;Non;NAVARRO Jean-Philippe
+12803661;SABATIER Pascale;Résidence Principale;Résidence principale;Patrimoine;;280 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;22/08/2022;Non;Non;NAVARRO Jean-Philippe
+12803662;SABATIER Pascale;Classique;Immobilier locatif classique;Patrimoine;;130 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;22/08/2022;Non;Non;NAVARRO Jean-Philippe
+12803667;SABATIER Pascale;Livret A;Livret A;Patrimoine;;23 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;22/08/2022;Non;Non;NAVARRO Jean-Philippe
+12803668;SABATIER Pascale;Compte Epargne Logement CEL;Compte Epargne Logement (CEL);Patrimoine;;15 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;22/08/2022;Non;Non;NAVARRO Jean-Philippe
+12803669;SABATIER Pascale;Assurance-vie;Assurance-vie;Patrimoine;;63 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;22/08/2022;Non;Non;NAVARRO Jean-Philippe
+12803670;SABATIER Pascale;Autres Liquidités;PARTS SOCIALES CAISSE EP MR;Patrimoine;;150 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;22/08/2022;Non;Non;NAVARRO Jean-Philippe
+12803671;SABATIER Pascale;Assurance-vie;Assurance-vie;Patrimoine;;153 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;22/08/2022;Non;Non;NAVARRO Jean-Philippe
+12941211;CASANOVAS Caroline;Livret A;Livret A;Patrimoine;;23 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/11/2022;Non;Non;NAVARRO Jean-Philippe
+12941212;CASANOVAS Caroline,SUCH Nicolas;Compte à Terme;Compte à terme (CAT);Patrimoine;;750 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/11/2022;Non;Non;NAVARRO Jean-Philippe
+12941213;CASANOVAS Caroline,SUCH Nicolas;Livret A;Livret A;Patrimoine;;68 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/11/2022;Non;Non;NAVARRO Jean-Philippe
+12941214;SUCH Nicolas;Livret A;Livret A;Patrimoine;;23 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/11/2022;Non;Non;NAVARRO Jean-Philippe
+12941215;CASANOVAS Caroline;Plan d'Epargne Logement PEL;Plan d'Epargne Logement (PEL);Patrimoine;;6 100,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/11/2022;Non;Non;NAVARRO Jean-Philippe
+12956605;POUCHADON Valérie;PER;Pertinence Retraite;Vie Plus;269864599;14 206,00;15 000,00;14 325,00;0,00;-0,83;-119,00;-5,29;-794,00;1.26;10/11/2022;13/09/2024;Non;Oui;NAVARRO Jean-Philippe
+12961528;SOMMERER Nicolas;Classique;Immobilier locatif classique;Patrimoine;;180 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;29/11/2022;Oui;Non;NAVARRO Jean-Philippe
+13001381;LICENSE Olivier,GELIS Céline;Classique;Immobilier locatif classique;Patrimoine;;150 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;12/12/2022;Oui;Non;NAVARRO Jean-Philippe
+13002045;NAVARRO Camille;PER;Pertinence Retraite;Vie Plus;269888277;8 245,93;8 607,01;8 219,70;0,00;0,32;26,23;-4,20;-361,08;5.25;20/11/2022;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13002046;NAVARRO Emilie;PER;Pertinence Retraite;Vie Plus;269888291;8 055,00;8 408,00;8 029,65;0,00;0,32;25,35;-4,20;-353,00;0;20/11/2022;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13032724;SUCH Nicolas;PER;Pertinence Retraite;Vie Plus;269954617;7 012,95;7 500,00;7 162,52;0,00;-2,09;-149,57;-6,49;-487,05;0;06/12/2022;13/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13033921;CASANOVAS Caroline;PER;Pertinence Retraite;Vie Plus;269954711;7 008,99;7 500,00;7 162,52;0,00;-2,14;-153,53;-6,55;-491,01;1.53;06/12/2022;19/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13139971;VERCOUTRE Olivier;Compte Courant;Compte courant;Patrimoine;;64 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/02/2024;Non;Non;NAVARRO Jean-Philippe
+13139972;VERCOUTRE Olivier;Livret Classique;Livret Classique;Patrimoine;;46 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/02/2024;Non;Non;NAVARRO Jean-Philippe
+13163811;GEORGES Philippe;Résidence Principale;Résidence principale;Patrimoine;;400 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;12/03/2023;Oui;Non;NAVARRO Jean-Philippe
+13163814;GEORGES Philippe;Livret Classique;Livret Classique;Patrimoine;;16 500,00;0,00;0,00;0,00;0,00;;0,00;;0;;12/03/2023;Non;Non;NAVARRO Jean-Philippe
+13163815;GEORGES Philippe;Plan d'Epargne Logement PEL;Plan d'Epargne Logement (PEL);Patrimoine;;22 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;12/03/2023;Non;Non;NAVARRO Jean-Philippe
+13163816;GEORGES Philippe;Assurance-vie;Assurance-vie;Patrimoine;;190 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;12/03/2023;Non;Non;NAVARRO Jean-Philippe
+13163817;GEORGES Philippe;Compte Courant;Compte courant;Patrimoine;;14 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;12/03/2023;Non;Non;NAVARRO Jean-Philippe
+13163818;GEORGES Philippe;Plan d'Epargne pour la Retraite Collectif PERCO;PERCO;Patrimoine;;13 700,00;0,00;0,00;0,00;0,00;;0,00;;0;;12/03/2023;Non;Non;NAVARRO Jean-Philippe
+13186306;VERCOUTRE Isabelle;PER;Pertinence Retraite;Vie Plus;270215371;7 260,46;7 500,00;7 162,50;0,00;1,37;97,96;-3,19;-239,54;0;08/03/2023;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13192054;NAVARRO Jean-philippe,NAVARRO Claire;LMNP divers;LMNP classique;Patrimoine;;32 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;26/03/2023;Oui;Non;NAVARRO Jean-Philippe
+13192733;VERCOUTRE Olivier;PER;Pertinence Retraite;Vie Plus;270215340;7 257,15;7 500,00;7 162,50;0,00;1,32;94,65;-3,24;-242,85;7.51;08/03/2023;13/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13286221;DAVID Lionel;Résidence Principale;Résidence principale;Patrimoine;;300 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/05/2023;Non;Non;NAVARRO Jean-Philippe
+13286222;DAVID Lionel;Classique;Immobilier locatif classique;Patrimoine;;60 500,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/05/2023;Oui;Non;NAVARRO Jean-Philippe
+13286224;DAVID Lionel;Livret Classique;Livret Classique;Patrimoine;;10 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/05/2023;Non;Non;NAVARRO Jean-Philippe
+13286225;DAVID Lionel;Livret A;Livret A;Patrimoine;;20 350,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/05/2023;Non;Non;NAVARRO Jean-Philippe
+13286226;DAVID Lionel;Livret Classique;Livret Classique;Patrimoine;;3 600,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/05/2023;Non;Non;NAVARRO Jean-Philippe
+13286227;DAVID Lionel;Plan d'Epargne Logement PEL;Plan d'Epargne Logement (PEL);Patrimoine;;31 500,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/05/2023;Non;Non;NAVARRO Jean-Philippe
+13344778;NAVARRO Jean-philippe;PER;Pertinence Retraite;Vie Plus;270428393;1 037,69;1 000,00;955,00;0,00;8,66;82,69;3,77;37,69;0;09/06/2023;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13347620;DAVID Lionel;Assurance-vie;Cristalliance Avenir;SURAVENIR;270447656;19 041,58;20 000,00;19 040,00;0,00;0,01;1,58;-4,79;-958,42;6.97;16/06/2023;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13355044;DAVID Lionel;PER;Pertinence Retraite;Vie Plus;270447649;3 484,54;3 600,00;3 438,00;0,00;1,35;46,54;-3,21;-115,46;0;16/06/2023;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13396677;ROUCHOUSE Laure;PEA PME;INTENCIAL Initiatives PEA PME;GRESHAM Banque;000208155;19 489,09;0,00;0,00;0,00;0,00;;0,00;;0;22/10/2020;05/01/2024;Non;Oui;NAVARRO Jean-Philippe
+13516795;DOUGUET Celine,TOUPIN Pierre;Résidence Principale;Résidence principale;Patrimoine;;350 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;02/11/2023;Oui;Non;NAVARRO Jean-Philippe
+13516804;DOUGUET Celine;Livret A;Livret A;Patrimoine;;28 350,00;0,00;0,00;0,00;0,00;;0,00;;0;;01/11/2023;Non;Non;NAVARRO Jean-Philippe
+13516805;DOUGUET Celine;Livret de Développement Durable;Livret de Développement Durable LDD;Patrimoine;;12 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;30/10/2023;Non;Non;NAVARRO Jean-Philippe
+13516806;TOUPIN Pierre;Livret A;Livret A;Patrimoine;;16 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;30/10/2023;Non;Non;NAVARRO Jean-Philippe
+13516807;DOUGUET Celine;Assurance-vie;Assurance-vie;Patrimoine;;50,00;0,00;0,00;0,00;0,00;;0,00;;0;;01/11/2023;Non;Non;NAVARRO Jean-Philippe
+13516808;DOUGUET Celine;Plan d'Epargne Logement PEL;Plan d'Epargne Logement (PEL);Patrimoine;;5 500,00;0,00;0,00;0,00;0,00;;0,00;;0;;30/10/2023;Non;Non;NAVARRO Jean-Philippe
+13516809;TOUPIN Pierre;Compte Epargne Logement CEL;Compte Epargne Logement (CEL);Patrimoine;;4 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;30/10/2023;Non;Non;NAVARRO Jean-Philippe
+13516810;TOUPIN Pierre;Assurance-vie;Assurance-vie;Patrimoine;;71 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;30/10/2023;Non;Non;NAVARRO Jean-Philippe
+13516811;TOUPIN Pierre;Plan d'Epargne Logement PEL;Plan d'Epargne Logement (PEL);Patrimoine;;32 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;30/10/2023;Non;Non;NAVARRO Jean-Philippe
+13516816;ALIOS-DUPLAT Emmanuelle;Loi Pinel;Pinel;Patrimoine;;331 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;30/10/2023;Oui;Non;NAVARRO Jean-Philippe
+13569272;GALLEY Hervé;Résidence Principale;Résidence principale;Patrimoine;;325 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;26/11/2023;Oui;Non;NAVARRO Jean-Philippe
+13569274;GALLEY Hervé;Livret Classique;Livret Classique;Patrimoine;;115 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;26/11/2023;Non;Non;NAVARRO Jean-Philippe
+13569275;GALLEY Hervé;Plan d'Epargne pour la Retraite Collectif PERCO;PERCO;Patrimoine;;3 600,00;0,00;0,00;0,00;0,00;;0,00;;0;;26/11/2023;Non;Non;NAVARRO Jean-Philippe
+13575014;ALIOS-DUPLAT Emmanuelle;PER;Pertinence Retraite;Vie Plus;270745982;1 958,57;2 000,00;1 910,00;0,00;2,54;48,57;-2,07;-41,43;0;05/11/2023;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13578791;DOUGUET Celine;Assurance-vie;Cristalliance Avenir;SURAVENIR;270766652;18 620,08;19 350,00;18 421,20;0,00;1,08;198,88;-3,77;-729,92;0;13/11/2023;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13584932;SOMMERER Nicolas;FIP;FIP;Patrimoine;;17 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;04/12/2023;Non;Non;NAVARRO Jean-Philippe
+13591122;NAVARRO Claire;PER;P-PER;Apicil Epargne;7027200;1 957,53;2 000,00;1 910,00;0,00;2,49;47,53;-2,12;-42,47;0;30/11/2023;20/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13593541;TORTOCHAUX Antoine;Livret A;Livret A;Patrimoine;;20 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+13610097;TORTOCHAUX Damien;PER;PER;Patrimoine;;72 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+13610098;TORTOCHAUX Luce;PER;PER;Patrimoine;;30 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+13610110;TORTOCHAUX Antoine;Assurance-vie;Assurance-vie;Patrimoine;;21 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;15/12/2023;Non;Non;NAVARRO Jean-Philippe
+13612881;NAVARRO Jean-philippe;PER;P-PER;Apicil Epargne;7027860;976,04;1 000,00;955,00;0,00;2,20;21,04;-2,40;-23,96;0;13/12/2023;20/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13620569;DE LESTRADE DE CONTY Stéphane,DE LESTRADE DE CONTY Sonia;Classique;Immobilier locatif classique;Patrimoine;;400 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;21/12/2023;Non;Non;NAVARRO Jean-Philippe
+13620570;DE LESTRADE DE CONTY Stéphane,DE LESTRADE DE CONTY Sonia;Résidence Secondaire;Résidence Secondaire;Patrimoine;;200 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;21/12/2023;Non;Non;NAVARRO Jean-Philippe
+13620571;DE LESTRADE DE CONTY Stéphane,DE LESTRADE DE CONTY Sonia;Livret de Développement Durable;Livret de Développement Durable LDD;Patrimoine;;20 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;21/12/2023;Non;Non;NAVARRO Jean-Philippe
+13620572;DE LESTRADE DE CONTY Stéphane,DE LESTRADE DE CONTY Sonia;Assurance-vie;Assurance-vie;Patrimoine;;30 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;21/12/2023;Non;Non;NAVARRO Jean-Philippe
+13623640;CALMET Jean-marc;Classique;Immobilier locatif classique;Patrimoine;;250 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+13623641;CALMET Jean-marc;Compte à Terme;Compte à terme (CAT);Patrimoine;;568 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+13623642;CALMET Jean-marc;Assurance-vie;Assurance-vie;Patrimoine;;103 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+13623643;CALMET Jean-marc;Livret Classique;Livret Classique;Patrimoine;;41 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+13623644;CALMET Jean-marc;Résidence Principale;Résidence principale;Patrimoine;;550 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+13623645;CALMET Jean-marc;PER;PER;Patrimoine;;41 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+13623646;CALMET Sylvie;Classique;Immobilier locatif classique;Patrimoine;;5 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+13623647;CALMET Sylvie;Classique;Immobilier locatif classique;Patrimoine;;50 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/12/2023;Non;Non;NAVARRO Jean-Philippe
+13627644;DOUGUET Celine;PER;P-PER;Apicil Epargne;7028249;864,01;900,00;859,50;0,00;0,52;4,51;-4,00;-35,99;0;19/12/2023;20/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13627723;GALLEY Hervé;PER;P-PER;Apicil Epargne;7028091;14 598,34;15 000,00;14 325,00;0,00;1,91;273,34;-2,68;-401,66;0;18/12/2023;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13627940;TORTOCHAUX Antoine;PER;Pertinence Retraite;Vie Plus;270905195;16 410,20;16 700,00;15 948,50;0,00;2,89;461,70;-1,74;-289,80;0;17/12/2023;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13631227;DE LESTRADE DE CONTY Stéphane;PER;Pertinence Retraite;Vie Plus;270935620;29 113,93;30 000,00;28 650,00;0,00;1,62;463,93;-2,95;-886,07;0;22/12/2023;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13635534;TORTOCHAUX Laura;PER;Pertinence Retraite;Vie Plus;270899530;16 410,09;16 700,00;15 948,50;0,00;2,89;461,59;-1,74;-289,91;0;15/12/2023;16/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13700488;VERCOUTRE Matis;Livret A;Livret A;Patrimoine;;20 600,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/02/2024;Non;Non;NAVARRO Jean-Philippe
+13707957;VERCOUTRE Mélissa;Compte Epargne Logement CEL;Compte Epargne Logement (CEL);Patrimoine;;15 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/02/2024;Non;Non;NAVARRO Jean-Philippe
+13707958;VERCOUTRE Mélissa;Compte Courant;Compte courant;Patrimoine;;11 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/02/2024;Non;Non;NAVARRO Jean-Philippe
+13707978;VERCOUTRE Matis;Compte Courant;Compte courant;Patrimoine;;2 900,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/02/2024;Non;Non;NAVARRO Jean-Philippe
+13707979;VERCOUTRE Matis;Compte Epargne Logement CEL;Compte Epargne Logement (CEL);Patrimoine;;15 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;20/02/2024;Non;Non;NAVARRO Jean-Philippe
+13719141;URIZ-JAUREGUI Fermin;Résidence Principale;Résidence principale;Patrimoine;;500 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;27/02/2024;Oui;Non;NAVARRO Jean-Philippe
+13742969;SOMMERER Yannick,SOMMERER Stéphanie;Classique;Immobilier locatif classique;Patrimoine;;300 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;12/03/2024;Oui;Non;NAVARRO Jean-Philippe
+13756682;ROUCHOUSE Laure;Assurance-vie;Cristalliance Avenir;SURAVENIR;270779105;68 321,09;0,00;0,00;0,00;0,00;;0,00;;2.53;15/11/2023;24/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13763259;GALLEY Hervé;Assurance-vie;Cristalliance Avenir;SURAVENIR;271134417;63 537,98;65 000,00;62 660,00;0,00;1,40;877,98;-2,25;-1 462,02;0.8;12/03/2024;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13775679;SOMMERER Yannick;Assurance-vie;Cristalliance Avenir;SURAVENIR;271141376;48 831,24;50 001,00;48 200,97;0,00;1,31;630,27;-2,34;-1 169,76;0;13/03/2024;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13775680;SOMMERER Stéphanie;Assurance-vie;Cristalliance Avenir;SURAVENIR;271141424;48 831,24;50 001,00;48 200,97;0,00;1,31;630,27;-2,34;-1 169,76;0;13/03/2024;23/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13879328;PFIRRMANN Pauline;Résidence Principale;Résidence principale;Patrimoine;;334 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;11/06/2024;Oui;Non;NAVARRO Jean-Philippe
+13879330;PFIRRMANN Pauline;Livret Classique;Livret Classique;Patrimoine;;35 600,00;0,00;0,00;0,00;0,00;;0,00;;0;;11/06/2024;Non;Non;NAVARRO Jean-Philippe
+13879331;PFIRRMANN Pauline;Compte Courant;Compte courant;Patrimoine;;4 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;11/06/2024;Non;Non;NAVARRO Jean-Philippe
+13879332;PFIRRMANN Pauline;Plan d'Epargne Entreprise PEE;PEE;Patrimoine;;19 000,00;0,00;0,00;0,00;0,00;;0,00;;0;;11/06/2024;Non;Non;NAVARRO Jean-Philippe
+13924071;TOUPIN Pierre;PER;P-PER;Apicil Epargne;7031541;242,77;250,00;238,75;0,00;1,68;4,02;-2,89;-7,23;0;02/07/2024;20/09/2024;Non;Oui;NAVARRO Jean-Philippe
+13939460;PFIRRMANN Pauline;PER;Pertinence Retraite;Vie Plus;271478110;7 734,66;8 000,00;7 640,00;0,00;1,24;94,66;-3,32;-265,34;0;;13/09/2024;Non;Oui;NAVARRO Jean-Philippe
