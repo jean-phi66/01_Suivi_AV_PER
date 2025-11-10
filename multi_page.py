@@ -59,6 +59,12 @@ prod_struct_page = st.Page(
     icon = '🧮'
 )
 
+fonds_portefeuille_page = st.Page(
+    page = 'views/fonds_portefeuille.py',
+    title = "Fonds du portefeuille",
+    icon = '📊'
+)
+
 test_page = st.Page(
     page = 'views/time_serie.py',
     title = 'TEST',
@@ -68,7 +74,7 @@ test_page = st.Page(
 pg = st.navigation({"DONNEES":[data_ingestion_page], 
                     "CLIENT":[client_page, composition_page, perfo_page], 
                     #"OPERATION":[arbitrage_page, VC_page],
-                    "PORTEFEUILLE SOUS GESTION":[sous_gestion_page, exposition_page, prod_struct_page], 
+                    "PORTEFEUILLE SOUS GESTION":[sous_gestion_page, exposition_page, prod_struct_page, fonds_portefeuille_page], 
                     "Reporting":[ batch_reports_page],
                     #"TEST":[test_page]
                     })
