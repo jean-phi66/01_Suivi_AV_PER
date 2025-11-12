@@ -100,7 +100,8 @@ for _, fonds in top_n_fonds.iterrows():
     treemap_data.append({
         'Support': fonds['Support'],
         'Code ISIN': fonds['Code ISIN'],
-        'Categorie': fonds['Support'],
+        'Type_fonds': fonds['Type'],  # Niveau 1 - Type de fonds
+        'Nom_fonds': fonds['Support'],  # Niveau 2 - Nom du fonds
         'Valeur': valeur,
         'Pourcentage': pourcentage,
         'Encours': fonds['Encours en €'],
@@ -108,15 +109,16 @@ for _, fonds in top_n_fonds.iterrows():
         'Type': fonds['Type']
     })
 
-# Ajouter la catégorie "Autres" si il y a des fonds en plus
+# Ajouter la catégorie "Non sélectionnés" si il y a des fonds en plus
 if len(autres_fonds) > 0:
     valeur_autres = autres_fonds[critere_colonne].sum()
     pourcentage_autres = (valeur_autres / total_valeur * 100) if total_valeur > 0 else 0
     
     treemap_data.append({
-        'Support': 'Autres',
+        'Support': 'Autres fonds',
         'Code ISIN': 'N/A',
-        'Categorie': 'Autres',
+        'Type_fonds': 'Non sélectionnés',  # Niveau 1 - Catégorie spécifique pour les fonds non sélectionnés
+        'Nom_fonds': f'{len(autres_fonds)} autres fonds',  # Niveau 2 - Indication du nombre de fonds regroupés
         'Valeur': valeur_autres,
         'Pourcentage': pourcentage_autres,
         'Encours': autres_fonds['Encours en €'].sum(),
@@ -129,12 +131,12 @@ treemap_df = pd.DataFrame(treemap_data)
 # Création du treemap
 st.header(f"Répartition des {n_fonds} fonds les plus représentés")
 
-# Création du treemap avec pourcentages
+# Création du treemap avec pourcentages et regroupement par type
 fig_treemap = px.treemap(
     treemap_df,
-    path=['Categorie'],
+    path=['Type_fonds', 'Nom_fonds'],  # Hiérarchie: Type de fonds > Nom du fonds
     values='Valeur',
-    title=f"Treemap des fonds par {critere_label.lower()}",
+    title=f"Treemap des fonds par {critere_label.lower()} (regroupés par type)",
     hover_data={
         'Encours': ':,.2f',
         'Nb_utilisations': True,
@@ -192,29 +194,58 @@ st.dataframe(
 # Export des codes ISIN
 st.header("🔽 Export des codes ISIN")
 
-# Générer la liste des codes ISIN des top N fonds
-codes_isin = top_n_fonds['Code ISIN'].dropna().tolist()
+# Filtre par type de fonds pour l'export
+st.subheader("Filtre par type de fonds")
+types_disponibles = sorted(top_n_fonds['Type'].unique())
+types_selectionnes = st.multiselect(
+    "Types de fonds à inclure dans l'export",
+    options=types_disponibles,
+    default=types_disponibles,  # Par défaut, tous les types sont sélectionnés
+    help="Désélectionnez les types de fonds que vous souhaitez exclure de l'export des codes ISIN"
+)
+
+# Filtrer les fonds selon les types sélectionnés
+if types_selectionnes:
+    fonds_filtres = top_n_fonds[top_n_fonds['Type'].isin(types_selectionnes)]
+else:
+    fonds_filtres = pd.DataFrame()  # DataFrame vide si aucun type sélectionné
+
+# Générer la liste des codes ISIN des fonds filtrés
+codes_isin = fonds_filtres['Code ISIN'].dropna().tolist()
 codes_isin_str = '; '.join(codes_isin)
 
 # Afficher dans une zone de texte copiable
-st.subheader(f"Codes ISIN des {len(codes_isin)} fonds sélectionnés")
-st.text_area(
-    "Codes ISIN (séparés par des point-virgules)",
-    value=codes_isin_str,
-    height=150,
-    help="Sélectionnez tout le texte (Ctrl+A) puis copiez (Ctrl+C / Cmd+C)"
-)
+if types_selectionnes:
+    st.subheader(f"Codes ISIN des {len(codes_isin)} fonds sélectionnés")
+    
+    # Affichage des statistiques par type dans un expandeur
+    if len(fonds_filtres) > 0:
+        with st.expander("📊 Statistiques détaillées"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Répartition par type :**")
+                repartition_types = fonds_filtres['Type'].value_counts()
+                for type_fonds, count in repartition_types.items():
+                    st.write(f"- {type_fonds}: {count} fonds")
+            
+            with col2:
+                st.write("**Statistiques :**")
+                st.write(f"- Encours total: {fonds_filtres['Encours en €'].sum():,.2f} €")
+                st.write(f"- Codes ISIN disponibles: {len(codes_isin)}")
+                codes_manquants = len(fonds_filtres) - len(codes_isin)
+                if codes_manquants > 0:
+                    st.write(f"- Codes ISIN manquants: {codes_manquants}")
+    
+    st.text_area(
+        "Codes ISIN (séparés par des point-virgules)",
+        value=codes_isin_str,
+        height=150,
+        help="Sélectionnez tout le texte (Ctrl+A) puis copiez (Ctrl+C / Cmd+C)"
+    )
+else:
+    st.warning("⚠️ Aucun type de fonds sélectionné. Choisissez au moins un type pour générer l'export.")
 
-# Statistiques sur les codes ISIN
-col1, col2 = st.columns(2)
-with col1:
-    st.metric("Codes ISIN disponibles", len(codes_isin))
-with col2:
-    codes_manquants = len(top_n_fonds) - len(codes_isin)
-    if codes_manquants > 0:
-        st.metric("Codes ISIN manquants", codes_manquants, delta=-codes_manquants)
-    else:
-        st.metric("Codes ISIN manquants", 0, delta="✅")
+
 
 # Affichage des "Autres" si pertinent
 if len(autres_fonds) > 0:
