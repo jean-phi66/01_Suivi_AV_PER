@@ -220,6 +220,12 @@ if types_selectionnes:
     
     # Affichage des statistiques par type dans un expandeur
     if len(fonds_filtres) > 0:
+        st.text_area(
+        "Codes ISIN (séparés par des point-virgules)",
+        value=codes_isin_str,
+        height=150,
+        help="Sélectionnez tout le texte (Ctrl+A) puis copiez (Ctrl+C / Ctrl+C)"
+    )
         with st.expander("📊 Statistiques détaillées"):
             col1, col2 = st.columns(2)
             with col1:
@@ -236,12 +242,7 @@ if types_selectionnes:
                 if codes_manquants > 0:
                     st.write(f"- Codes ISIN manquants: {codes_manquants}")
     
-    st.text_area(
-        "Codes ISIN (séparés par des point-virgules)",
-        value=codes_isin_str,
-        height=150,
-        help="Sélectionnez tout le texte (Ctrl+A) puis copiez (Ctrl+C / Cmd+C)"
-    )
+
 else:
     st.warning("⚠️ Aucun type de fonds sélectionné. Choisissez au moins un type pour générer l'export.")
 

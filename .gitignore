@@ -1,0 +1,28 @@
+# Données sensibles - Exports
+00_Exports/
+
+# Fichiers Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environnements
+.env
+.venv
+env/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Système
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
