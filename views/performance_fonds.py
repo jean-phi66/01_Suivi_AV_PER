@@ -6,6 +6,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import os
 import glob
+from scipy.optimize import minimize
+from scipy.interpolate import make_interp_spline, splprep, splev
 
 st.title("📈 Performance historique des fonds")
 
@@ -62,6 +64,112 @@ st.success(
     f"✅ Données chargées : {len(df_perfs_all):,} lignes ({nb_fonds} fonds), du "
     f"{df_perfs_all['Date'].min().strftime('%d/%m/%Y')} au {df_perfs_all['Date'].max().strftime('%d/%m/%Y')}"
 )
+
+# Fonction pour calculer la frontière efficiente
+def calculate_efficient_frontier(df_fonds_list, fonds_list):
+    """Calcule la frontière efficiente avec optimisation et matrice de covariance"""
+    if len(fonds_list) < 2:
+        return None, None
+    
+    try:
+        # Préparer les rendements quotidiens directement de df_fonds_list
+        rendements_dict = {}
+        for fonds in fonds_list:
+            df_f = df_fonds_list[df_fonds_list['Nom_fonds'] == fonds].sort_values('Date')
+            if len(df_f) > 1:
+                rends = df_f['Rendement'].dropna().values
+                if len(rends) > 2:
+                    rendements_dict[fonds] = rends
+        
+        if len(rendements_dict) < 2:
+            return None, None
+        
+        # Aligner à la même longueur
+        min_len = min(len(r) for r in rendements_dict.values())
+        if min_len < 2:
+            return None, None
+        
+        fonds_keys = list(rendements_dict.keys())
+        rendements_array = np.array([rendements_dict[f][-min_len:] for f in fonds_keys])
+        
+        nb_jours = min_len
+        n_assets = len(fonds_keys)
+        
+        # Rendements annualisés des fonds individuels
+        perf_cumulees = np.prod(1 + rendements_array, axis=1)
+        mean_returns_annualized = ((perf_cumulees ** (365 / nb_jours)) - 1)
+        
+        # Matrice de covariance
+        cov_matrix = np.cov(rendements_array)
+        
+        frontier_vol = []
+        frontier_ret = []
+        
+        # Grille de rendements cibles
+        ret_min = np.min(mean_returns_annualized)
+        ret_max = np.max(mean_returns_annualized)
+        target_rets = np.linspace(ret_min * 0.95, ret_max * 1.05, 100)
+        
+        for target_ret in target_rets:
+            # Fonction objectif : minimiser la volatilité
+            def portfolio_vol(weights):
+                var = np.dot(weights.T, np.dot(cov_matrix * 252, weights))
+                return np.sqrt(max(var, 0))
+            
+            # Contraintes
+            constraints = [
+                {'type': 'eq', 'fun': lambda w: np.sum(w) - 1},  # Somme des poids = 1
+                {'type': 'eq', 'fun': lambda w: np.dot(w, mean_returns_annualized) - target_ret}  # Rendement cible
+            ]
+            
+            bounds = tuple((0, 1) for _ in range(n_assets))
+            x0 = np.array([1.0 / n_assets] * n_assets)
+            
+            try:
+                result = minimize(
+                    portfolio_vol,
+                    x0,
+                    method='SLSQP',
+                    bounds=bounds,
+                    constraints=constraints,
+                    options={'maxiter': 1000, 'ftol': 1e-9}
+                )
+                
+                if result.success:
+                    vol = portfolio_vol(result.x)
+                    ret = np.dot(result.x, mean_returns_annualized)
+                    
+                    # Ajouter si cohérent
+                    if 0 <= vol < 2 and -0.5 < ret < 2:
+                        frontier_vol.append(vol * 100)
+                        frontier_ret.append(ret * 100)
+            except:
+                pass
+        
+        if len(frontier_vol) > 1:
+            # Trier et dédupliquer
+            data = sorted(zip(frontier_vol, frontier_ret))
+            frontier_vol = [v for v, r in data]
+            frontier_ret = [r for v, r in data]
+            
+            # Garder seulement l'enveloppe efficiente
+            unique_frontier_vol = []
+            unique_frontier_ret = []
+            max_ret = -np.inf
+            
+            for vol, ret in zip(frontier_vol, frontier_ret):
+                if ret >= max_ret - 1e-6:
+                    unique_frontier_vol.append(vol)
+                    unique_frontier_ret.append(ret)
+                    max_ret = ret
+            
+            if len(unique_frontier_vol) > 1:
+                return unique_frontier_vol, unique_frontier_ret
+        
+        return None, None
+        
+    except Exception as e:
+        return None, None
 
 # Mettre les onglets TOUT EN HAUT et piloter tout l'affichage par onglet
 tab_man, tab_auto, tab_contrat = st.tabs(["Sélection manuelle", "Sélection auto (Top N)", "Par contrat"])
@@ -269,6 +377,24 @@ with tab_man:
                 marker=dict(size=15, color=colors[i % len(colors)]),
                 hovertemplate='<b>%{text}</b><br>Volatilité: %{x:.2f}%<br>Rendement annualisé: %{y:.2f}%<extra></extra>'
             ))
+        
+        # Ajouter la frontière efficiente
+        frontier_vols, frontier_rets = calculate_efficient_frontier(df_all_perfs, fonds_selectionnes)
+        if frontier_vols is not None and frontier_rets is not None and len(frontier_vols) > 0:
+            # Trier par volatilité pour tracer correctement
+            sorted_indices = np.argsort(frontier_vols)
+            frontier_vols_sorted = [frontier_vols[i] for i in sorted_indices]
+            frontier_rets_sorted = [frontier_rets[i] for i in sorted_indices]
+            
+            fig_scatter.add_trace(go.Scatter(
+                x=frontier_vols_sorted,
+                y=frontier_rets_sorted,
+                mode='lines',
+                name='Frontière efficiente',
+                line=dict(color='red', width=2, dash='dash'),
+                hovertemplate='Volatilité: %{x:.2f}%<br>Rendement annualisé: %{y:.2f}%<extra></extra>'
+            ))
+        
         fig_scatter.update_layout(
             title="Rendement vs Volatilité (annualisés)",
             xaxis_title="Volatilité annualisée (%)",
@@ -510,6 +636,23 @@ with tab_auto:
                             marker=dict(size=15, color=colors_a[i % len(colors_a)]),
                             hovertemplate='<b>%{text}</b><br>Volatilité: %{x:.2f}%<br>Rendement annualisé: %{y:.2f}%<extra></extra>'
                         ))
+                    
+                    # Ajouter la frontière efficiente (auto)
+                    frontier_vols_a, frontier_rets_a = calculate_efficient_frontier(df_all_perfs_auto, df_all_perfs_auto['Nom_fonds'].unique().tolist())
+                    if frontier_vols_a is not None and frontier_rets_a is not None and len(frontier_vols_a) > 0:
+                        sorted_indices_a = np.argsort(frontier_vols_a)
+                        frontier_vols_sorted_a = [frontier_vols_a[i] for i in sorted_indices_a]
+                        frontier_rets_sorted_a = [frontier_rets_a[i] for i in sorted_indices_a]
+                        
+                        fig_scatter_a.add_trace(go.Scatter(
+                            x=frontier_vols_sorted_a,
+                            y=frontier_rets_sorted_a,
+                            mode='lines',
+                            name='Frontière efficiente',
+                            line=dict(color='red', width=2, dash='dash'),
+                            hovertemplate='Volatilité: %{x:.2f}%<br>Rendement annualisé: %{y:.2f}%<extra></extra>'
+                        ))
+                    
                     fig_scatter_a.update_layout(
                         title="Rendement vs Volatilité (annualisés)",
                         xaxis_title="Volatilité annualisée (%)",
@@ -705,6 +848,23 @@ with tab_contrat:
                 marker=dict(size=15, color=colors_c[i % len(colors_c)]),
                 hovertemplate='<b>%{text}</b><br>Volatilité: %{x:.2f}%<br>Rendement annualisé: %{y:.2f}%<extra></extra>'
             ))
+        
+        # Ajouter la frontière efficiente (contrat)
+        frontier_vols_c, frontier_rets_c = calculate_efficient_frontier(df_perfs_ctr, df_perfs_ctr['Nom_fonds'].unique().tolist())
+        if frontier_vols_c is not None and frontier_rets_c is not None and len(frontier_vols_c) > 0:
+            sorted_indices_c = np.argsort(frontier_vols_c)
+            frontier_vols_sorted_c = [frontier_vols_c[i] for i in sorted_indices_c]
+            frontier_rets_sorted_c = [frontier_rets_c[i] for i in sorted_indices_c]
+            
+            fig_scatter_c.add_trace(go.Scatter(
+                x=frontier_vols_sorted_c,
+                y=frontier_rets_sorted_c,
+                mode='lines',
+                name='Frontière efficiente',
+                line=dict(color='red', width=2, dash='dash'),
+                hovertemplate='Volatilité: %{x:.2f}%<br>Rendement annualisé: %{y:.2f}%<extra></extra>'
+            ))
+        
         fig_scatter_c.update_layout(
             title="Rendement vs Volatilité (annualisés)",
             xaxis_title="Volatilité annualisée (%)",
