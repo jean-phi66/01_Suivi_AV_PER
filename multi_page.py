@@ -39,6 +39,12 @@ fiche_per_page = st.Page(
     icon = '📝'
 )
 
+fiche_av_page = st.Page(
+    page = 'views/fiche_av.py',
+    title = "Arbitrage AV",
+    icon = '📝'
+)
+
 composition_page = st.Page(
     page = 'views/composition.py',
     title = "Composition",
@@ -83,6 +89,12 @@ performance_fonds_page = st.Page(
     icon = '📈'
 )
 
+catalogue_fonds_page = st.Page(
+    page = 'views/fonds_catalogue.py',
+    title = "Catalogue des fonds",
+    icon = '🗂️'
+)
+
 test_page = st.Page(
     page = 'views/time_serie.py',
     title = 'TEST',
@@ -90,15 +102,21 @@ test_page = st.Page(
 )
 
 show_arbitrage_per = False
+show_arbitrage_av = False
 df_contrat_selected = ss.get("df_contrat_selected")
 if df_contrat_selected is not None and hasattr(df_contrat_selected, "empty") and not df_contrat_selected.empty:
     if "Enveloppe" in df_contrat_selected.columns:
-        show_arbitrage_per = str(df_contrat_selected["Enveloppe"].iloc[0]) == "PER"
+        enveloppe = str(df_contrat_selected["Enveloppe"].iloc[0])
+        show_arbitrage_per = enveloppe == "PER"
+        upper_env = enveloppe.upper()
+        show_arbitrage_av = "AV" in upper_env or "ASSURANCE" in upper_env
 
 nav_items = {
     "DONNEES": [data_ingestion_page],
     "CLIENT": [client_page, composition_page, perfo_page],
-    "OPERATIONS": [fiche_per_page] if show_arbitrage_per else [],
+    "OPERATIONS": [page for page in [fiche_per_page if show_arbitrage_per else None,
+                                      fiche_av_page if show_arbitrage_av else None]
+                    if page is not None],
     "PORTEFEUILLE SOUS GESTION": [
         sous_gestion_page,
         exposition_page,
@@ -106,6 +124,7 @@ nav_items = {
         fonds_portefeuille_page,
         performance_fonds_page,
     ],
+    "PARAMETRES": [catalogue_fonds_page],
     "Reporting": [batch_reports_page],
 }
 

@@ -6,7 +6,6 @@ from io import BytesIO
 import base64
 import json
 import re
-import zlib
 import urllib.error
 import urllib.request
 
@@ -17,27 +16,27 @@ import PyPDF2
 from pdfrw import PdfDict, PdfName, PdfObject, PdfReader, PdfString, PdfWriter
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-TEMPLATE_PATH = BASE_DIR / "pdf" / "PER" / "Fiche Conseil Vierge Courtage PPv3.pdf"
+TEMPLATE_PATH = BASE_DIR / "pdf" / "AV" / "Fiche Conseil Assurance Vie Arbitrage 03-25.pdf"
 MANDATAIRE_PATH = BASE_DIR / "defaults" / "mandataire.json"
 CATALOGUE_PATH = BASE_DIR / "defaults" / "fonds_catalogue.json"
 TOP_FUNDS_PATH = BASE_DIR / "00_Exports" / "3_Fonds" / "Export_Top_10_test.csv"
-HORIZON_RETIREMENT_VALUE = "/5"
 PROFILE_BALANCED_VALUE = "/3"
+
 OBJECTIVE_FIELD_MAP = {
-    "Optimiser sa fiscalite": "cac_objectif_1[0]",
-    "Optimiser la rentabilite de ses placements": "cac_objectif_2[0]",
-    "Aider ses enfants": "cac_objectif_3[0]",
-    "Proteger le conjoint survivant": "cac_objectif_4[0]",
-    "Proteger ses proches": "cac_objectif_5[0]",
-    "Preparer sa retraite": "cac_objectif_6[0]",
-    "Financer un achat immobilier": "cac_objectif_7[0]",
-    "Preparer la transmission de son patrimoine": "cac_objectif_8[0]",
-    "Preparer la transmission de son entreprise": "cac_objectif_9[0]",
-    "Obtenir des revenus complementaires": "cac_objectif_10[0]",
-    "Se constituer un patrimoine": "cac_objectif_11[0]",
-    "Se constituer une epargne de precaution": "cac_objectif_12[0]",
-    "Placer des liquidites a court terme": "cac_objectif_13[0]",
-    "Se premunir contre les accidents de la vie": "cac_objectif_14[0]",
+    "Optimiser sa fiscalite": "obj1",
+    "Optimiser la rentabilite de ses placements": "obj2",
+    "Aider ses enfants": "obj3",
+    "Proteger le conjoint survivant": "obj4",
+    "Proteger ses proches": "obj5",
+    "Preparer sa retraite": "obj6",
+    "Financer un achat immobilier": "obj7",
+    "Preparer la transmission de son patrimoine": "obj8",
+    "Preparer la transmission de son entreprise": "obj9",
+    "Obtenir des revenus complementaires": "obj10",
+    "Se constituer un patrimoine": "obj11",
+    "Se constituer une epargne de precaution": "obj12",
+    "Placer des liquidites a court terme": "obj13",
+    "Se premunir contre les accidents de la vie": "obj15",
 }
 
 
@@ -52,9 +51,28 @@ def _load_contract_options():
     with TEMPLATE_PATH.open("rb") as handle:
         reader = PyPDF2.PdfReader(handle)
         fields = reader.get_fields() or {}
-        field = fields.get("nomcontrat", {})
+        field = fields.get("choixcontrat", {})
         options = field.get("/Opt") or []
 
+    cleaned = []
+    for opt in options:
+        if isinstance(opt, (list, tuple)) and len(opt) == 2:
+            value, label = opt
+        else:
+            value = opt
+            label = opt
+        cleaned.append((str(label).strip(), str(value).strip()))
+    return cleaned
+
+
+def _load_choice_options(field_name: str):
+    if not TEMPLATE_PATH.exists():
+        return []
+    with TEMPLATE_PATH.open("rb") as handle:
+        reader = PyPDF2.PdfReader(handle)
+        fields = reader.get_fields() or {}
+        field = fields.get(field_name, {})
+        options = field.get("/Opt") or []
     cleaned = []
     for opt in options:
         if isinstance(opt, (list, tuple)) and len(opt) == 2:
@@ -78,53 +96,30 @@ def _match_contract_option(contract_name: str, options):
 
 def _build_envelope_text(objectives):
     base_text = (
-        "Le PER permet d'acceder a une solution d'epargne complete pour preparer la retraite, "
-        "completer ses revenus a terme, proteger ses proches tout en beneficiant d'une optimisation fiscale "
-        "grace a la deductibilite des versements. Cette solution d'epargne souple permet une approche "
-        "personnalisee, sur-mesure et evolutive tout au long de la vie pour constituer son capital et "
-        "completer ses revenus a la retraite a son rythme en fonction de ses besoins et de sa capacite financiere. "
-        "Au deces, l'epargne residuelle est transmise aux beneficiaires de son choix permettant d'assurer la protection "
-        "de ses proches librement."
+        "L'assurance-vie est une enveloppe d'epargne flexible qui permet d'investir sur une large selection de supports "
+        "financiers, de faire evoluer votre allocation selon vos objectifs et de beneficier d'une fiscalite avantageuse "
+        "au fil du temps. Elle permet egalement de preparer la transmission de votre patrimoine dans un cadre souple et "
+        "personnalise."
     )
 
     objective_texts = {
-        "Preparer sa retraite": (
-            "Preparer votre retraite en constituant un capital permettant d'obtenir des revenus complementaires a terme "
-            "en fonction de vos besoins (sortie en capital total ou fractionne, ou rente). Dans ce cadre, vous beneficiez "
-            "de la fiscalite specifique du PER suivant la nature des versements effectues a l'origine (deductibles ou non deductibles)."
-        ),
-        "Obtenir des revenus complementaires": (
-            "Preparer votre retraite en constituant un capital permettant d'obtenir des revenus complementaires a terme "
-            "en fonction de vos besoins (sortie en capital total ou fractionne, ou rente). Dans ce cadre, vous beneficiez "
-            "de la fiscalite specifique du PER suivant la nature des versements effectues a l'origine (deductibles ou non deductibles)."
-        ),
         "Optimiser la rentabilite de ses placements": (
-            "Optimiser la rentabilite et valoriser votre epargne en beneficiant d'une enveloppe financiere permettant une allocation "
-            "d'actifs sur-mesure et evolutive a long terme en fonction de votre profil de risque et de votre horizon de retraite."
+            "Optimiser la rentabilite et valoriser votre epargne en adaptant votre allocation au profil de risque retenu."
         ),
         "Optimiser sa fiscalite": (
-            "Optimiser sa fiscalite en beneficiant d'une deduction fiscale sur votre assiette imposable par les versements effectues "
-            "dans la limite de vos plafonds de deduction."
+            "Optimiser la fiscalite de votre epargne en tirant parti du cadre fiscal de l'assurance-vie."
         ),
         "Proteger ses proches": (
-            "Optimiser la transmission de votre patrimoine en protegeant vos proches en transmettant un capital financier dans le cadre "
-            "specifique du PER individuel qui beneficie d'un traitement hors-succession. Vous designez librement vos beneficiaires."
+            "Organiser la transmission de votre patrimoine et proteger vos proches grace aux beneficiaires designes."
         ),
         "Proteger le conjoint survivant": (
-            "Optimiser la transmission de votre patrimoine en protegeant vos proches en transmettant un capital financier dans le cadre "
-            "specifique du PER individuel qui beneficie d'un traitement hors-succession. Vous designez librement vos beneficiaires."
+            "Renforcer la protection du conjoint survivant via la clause beneficiaire."
         ),
         "Preparer la transmission de son patrimoine": (
-            "Optimiser la transmission de votre patrimoine en protegeant vos proches en transmettant un capital financier dans le cadre "
-            "specifique du PER individuel qui beneficie d'un traitement hors-succession. Vous designez librement vos beneficiaires."
-        ),
-        "Preparer la transmission de son entreprise": (
-            "Optimiser la transmission de votre patrimoine en protegeant vos proches en transmettant un capital financier dans le cadre "
-            "specifique du PER individuel qui beneficie d'un traitement hors-succession. Vous designez librement vos beneficiaires."
+            "Preparer la transmission de votre patrimoine en beneficiant des specificites de l'assurance-vie."
         ),
         "Financer un achat immobilier": (
-            "Preparer l'acquisition de votre future residence principale en investissant sur une enveloppe PER permettant de se constituer "
-            "un capital qui pourra etre investi sur les marches financiers afin de faire travailler votre argent."
+            "Se constituer un capital a terme pour financer un projet immobilier."
         ),
     }
 
@@ -132,43 +127,6 @@ def _build_envelope_text(objectives):
     if selected_objectives:
         return base_text + "\n\n" + "\n\n".join(selected_objectives)
     return base_text
-
-
-def _build_contract_text(contract_label: str):
-    contract_texts = {
-        "PERtinence Retraite": (
-            "Le PERtinence Retraite distribue par VIE PLUS offre l'ensemble des caracteristiques et standards qualitatifs d'un contrat haut de gamme "
-            "(plus de 250 supports financiers, 19 fonds immobiliers ; des modes de gestion libre, pilotee et sous mandat) qui vous permet de beneficier "
-            "d'un contrat complet et evolutif pour repondre a l'ensemble de vos besoins et objectifs patrimoniaux."
-        ),
-        "PER ERES by Swisslife": (
-            "Le PER ERES by SwissLife distribue par ERES offre l'ensemble des caracteristiques et standards qualitatifs d'un contrat haut de gamme "
-            "(plus de 110 supports financiers, 13 fonds immobiliers ; des modes de gestion libre et pilotee) qui vous permet de beneficier d'un contrat complet "
-            "et evolutif pour repondre a l'ensemble de vos besoins et objectifs patrimoniaux. Votre contrat est assure par SwissLife, un des leaders europeens "
-            "sur les solutions patrimoniales, permettant d'apporter le maximum de garantie a votre epargne."
-        ),
-        "PER ERES by Spirica": (
-            "Le PER ERES by Spirica distribue par ERES offre l'ensemble des caracteristiques et standards qualitatifs d'un contrat haut de gamme "
-            "(plus de 165 supports financiers, 21 fonds immobiliers ; des modes de gestion libre et pilotee) qui vous permet de beneficier d'un contrat complet "
-            "et evolutif pour repondre a l'ensemble de vos besoins et objectifs patrimoniaux. Votre contrat est assure par Spirica, specialiste dans la conception "
-            "et la gestion de solutions patrimoniales, et beneficia de la solidite du Groupe Credit Agricole."
-        ),
-        "Premavenir PER": (
-            "Le Premavenir PER distribue par ODDO est un contrat dedie permettant d'acceder a la gestion exclusive Oddo BHF avec une poche en multigestion "
-            "(33 supports financiers, 1 support immobilier SCI, et des modes de gestion libre et pilotee). Le contrat permet de beneficier d'un contrat complet "
-            "pour repondre a l'ensemble de vos besoins et objectifs patrimoniaux. Votre contrat est assure par GENERATION VIE, issue de l'alliance d'Allianz et Oddo BHF."
-        ),
-        "Cristalliance EvoluPER": (
-            "Le contrat EvoluPER distribue par APICIL offre l'ensemble des caracteristiques et standards qualitatifs d'un contrat haut de gamme "
-            "(plus de 270 supports financiers, 33 fonds immobiliers ; des modes de gestion libre, pilotee et sous mandat) qui vous permet de beneficier d'un contrat complet "
-            "et evolutif pour repondre a l'ensemble de vos besoins et objectifs patrimoniaux. Votre contrat est assure par Apicil Epargne."
-        ),
-    }
-
-    for key, text in contract_texts.items():
-        if _normalize_label(key) in _normalize_label(contract_label):
-            return text
-    return ""
 
 
 def _load_mandataire_defaults():
@@ -330,60 +288,6 @@ def _list_gemini_models(api_key):
     return [name.replace("models/", "") for name in names]
 
 
-def _apply_arbitrage_results(df_desinvest, df_invest, data):
-    df_desinvest = df_desinvest.copy()
-    df_invest = df_invest.copy()
-
-    for item in data.get("desinvestissements", []) or []:
-        pct = item.get("pourcentage")
-        if pct is None:
-            continue
-        isin = (item.get("isin") or "").strip().upper()
-        nom = (item.get("nom") or "").strip().lower()
-
-        mask = pd.Series([False] * len(df_desinvest))
-        if "Code ISIN" in df_desinvest.columns and isin:
-            mask = df_desinvest["Code ISIN"].str.upper() == isin
-        if not mask.any() and "Support" in df_desinvest.columns and nom:
-            mask = df_desinvest["Support"].str.lower() == nom
-        if mask.any():
-            df_desinvest.loc[mask, "Desinvest %"] = float(pct)
-        else:
-            df_desinvest = pd.concat([
-                df_desinvest,
-                pd.DataFrame([
-                    {"Support": item.get("nom", ""), "Code ISIN": isin or "", "Encours en EUR": "", "Desinvest %": float(pct)}
-                ])
-            ], ignore_index=True)
-
-    for item in data.get("investissements", []) or []:
-        pct = item.get("pourcentage")
-        if pct is None:
-            continue
-        isin = (item.get("isin") or "").strip().upper()
-        nom = (item.get("nom") or "").strip()
-
-        mask = pd.Series([False] * len(df_invest))
-        if "Code ISIN" in df_invest.columns and isin:
-            mask = df_invest["Code ISIN"].str.upper() == isin
-        if not mask.any() and "Support" in df_invest.columns and nom:
-            mask = df_invest["Support"].str.lower() == nom.lower()
-
-        if mask.any():
-            df_invest.loc[mask, "Invest %"] = float(pct)
-        else:
-            df_invest = pd.concat([
-                df_invest,
-                pd.DataFrame([
-                    {"Support": nom, "Code ISIN": isin or "", "Invest %": float(pct)}
-                ])
-            ], ignore_index=True)
-
-    df_desinvest = df_desinvest.drop_duplicates(subset=["Support", "Code ISIN"], keep="last")
-    df_invest = df_invest.drop_duplicates(subset=["Support", "Code ISIN"], keep="last")
-    return df_desinvest, df_invest
-
-
 def _rows_from_extraction(data, key, percent_col):
     rows = []
     items = data.get(key, []) or []
@@ -429,7 +333,19 @@ def _format_support_list(rows, percent_key):
     return ", ".join(parts)
 
 
-def _build_allocation_text(operation_type, montant, periodicite, profile_choice, desinvest_rows, invest_rows, arbitrage_mode=None):
+def _format_support_lines(rows, percent_key):
+    lines = []
+    for row in rows:
+        support = row.get("Support", "")
+        isin = row.get("Code ISIN", "")
+        ratio = row.get(percent_key, 0)
+        if support and ratio:
+            isin_label = f" ({isin})" if isin else ""
+            lines.append(f"{support}{isin_label} - {ratio} %")
+    return "\n".join(lines)
+
+
+def _build_allocation_text(operation_type, montant, periodicite, profile_choice, desinvest_rows, invest_rows):
     lines = []
 
     if operation_type:
@@ -441,124 +357,24 @@ def _build_allocation_text(operation_type, montant, periodicite, profile_choice,
             base += "."
         lines.append(base)
 
-    #if profile_choice:
-    #    lines.append(
-    #        f"Cette operation s'inscrit dans un profil de risque {profile_choice.lower()} et respecte votre effort d'epargne ainsi que votre capacite financiere."
-    #    )
-
     if operation_type == "Arbitrage":
-        desinvest_list = _format_support_list(desinvest_rows, "Desinvest %")
-        invest_list = _format_support_list(invest_rows, "Invest %")
-        invest_total = sum(row.get("Invest %", 0) for row in invest_rows)
-
-        if arbitrage_mode == "Arbitrage libre":
-            #lines.append(
-            #    "Le but de cette partie est de presenter l'operation qui va etre faite (supports desinvestis et reinvestis avec les pourcentages lies)."
-            #)
-            if profile_choice:
-                lines.append(
-                    "L'allocation de votre contrat apres arbitrage presente un profil de risque et de rendement pouvant aller jusqu'au profil "
-                    f"\"{profile_choice}\" qui est en adequation avec le profil de risque maximum accepte que vous avez selectionne pour ce contrat."
-                )
-            lines.append(
-                "Cette allocation se detaille comme suit pour l'allocation cible de mon contrat apres arbitrage :"
-            )
-            lines.append(
-                "J'effectue un arbitrage au sein de la gestion libre de votre contrat qui consiste a :"
-            )
-        elif arbitrage_mode == "Fin gestion pilotee":
-            lines.append(
-                "Actuellement en gestion pilotee, je vous propose d'arreter ce mode de gestion afin de passer en gestion libre "
-                "avec l'allocation suivante :"
-            )
-        elif arbitrage_mode == "Dynamisation progressive":
-            lines.append(
-                "En complement du present arbitrage, je vous propose la mise en place d'une dynamisation progressive afin de lisser "
-                "le point d'entree sur les marches. L'allocation cible respecte votre profil de risque."
-            )
-        elif arbitrage_mode == "Versements programmes":
-            lines.append(
-                "Nous avons evoque votre souhait de mettre en place ou modifier des versements programmes en coherence avec votre profil de risque."
-            )
-
-        if desinvest_list:
-            lines.append(f"Desinvestir {desinvest_list}.")
-        if invest_list:
-            lines.append(f"Reinvestir {invest_list}.")
-            if invest_total and invest_total != 100:
-                lines.append("Le total des pourcentages reinvestis doit faire 100 %.")
-    else:
+        if desinvest_rows or invest_rows:
+            lines.append("J'effectue un arbitrage au sein de la gestion libre de votre contrat qui consiste a :")
         if desinvest_rows:
-            lines.append("Supports desinvestis et pourcentages :")
-            for row in desinvest_rows:
-                support = row.get("Support", "")
-                isin = row.get("Code ISIN", "")
-                ratio = row.get("Desinvest %", 0)
-                lines.append(f"- {support} ({isin}) : {ratio} %")
-
+            lines.append("Desinvestir les supports suivants :")
+            lines.append(_format_support_list(desinvest_rows, "Desinvest %"))
         if invest_rows:
-            lines.append("Supports investis et pourcentages :")
-            for row in invest_rows:
-                support = row.get("Support", "")
-                isin = row.get("Code ISIN", "")
-                ratio = row.get("Invest %", 0)
-                lines.append(f"- {support} ({isin}) : {ratio} %")
+            lines.append("Reinvestir sur les supports suivants :")
+            lines.append(_format_support_list(invest_rows, "Invest %"))
 
-    return "\n".join(lines).strip()
+    return "\n".join([line for line in lines if line])
 
 
-def _extract_calc_map(field_name):
-    reader = PdfReader(str(TEMPLATE_PATH))
-    target = None
-    for page in reader.pages:
-        if not page.Annots:
-            continue
-        for annot in page.Annots:
-            if annot.T and PdfString.decode(annot.T) == field_name:
-                target = annot
-                break
-        if target:
-            break
-
-    if not target:
-        return {}
-
-    aa = target.get("/AA")
-    if not aa or not aa.get("/C"):
-        return {}
-
-    js = aa.get("/C").get("/JS")
-    if not js or not hasattr(js, "stream"):
-        return {}
-
-    data = js.stream
-    if isinstance(data, str):
-        data = data.encode("latin-1")
-
-    try:
-        script = zlib.decompress(data).decode("latin-1")
-    except Exception:
-        return {}
-
-    mapping = {}
-    pattern = re.compile(r"numcontrat\s*==\s*(\d+)\)\s*\{event\.target\.value\s*=\s*\"([^\"]*)\";")
-    for match in pattern.finditer(script):
-        mapping[match.group(1)] = match.group(2)
-    return mapping
-
-
-def _fill_pdf(fields, horizon_value=None, profile_value=None, choice_indices=None):
+def _fill_pdf(fields, button_values=None, choice_indices=None):
     def to_pdf_value(value):
         if isinstance(value, str) and value.startswith("/"):
             return PdfName(value[1:])
         return PdfString.encode(str(value))
-
-    nomcontrat_value = fields.get("nomcontrat")
-    if "enveloppefiscale" not in fields and nomcontrat_value is not None:
-        envelope_map = _extract_calc_map("enveloppefiscale")
-        auto_value = envelope_map.get(str(nomcontrat_value))
-        if auto_value:
-            fields["enveloppefiscale"] = auto_value
 
     reader = PdfReader(str(TEMPLATE_PATH))
     if reader.Root.AcroForm:
@@ -573,40 +389,41 @@ def _fill_pdf(fields, horizon_value=None, profile_value=None, choice_indices=Non
             continue
         for annot in page.Annots:
             parent = annot.get("/Parent")
-            if parent and (horizon_value or profile_value):
+            if parent and button_values:
                 parent_name = PdfString.decode(parent.get("/T")) if parent.get("/T") else None
-                if parent_name == "horizon" and horizon_value:
-                    pdf_value = to_pdf_value(horizon_value)
-                    parent.V = pdf_value
-                    if annot.AP and annot.AP.get("/N") and pdf_value in annot.AP.get("/N"):
-                        annot.AS = pdf_value
-                    else:
-                        annot.AS = PdfName("Off")
-                if parent_name == "Profil" and profile_value:
-                    pdf_value = to_pdf_value(profile_value)
+                if parent_name and parent_name in button_values:
+                    pdf_value = to_pdf_value(button_values[parent_name])
                     parent.V = pdf_value
                     if annot.AP and annot.AP.get("/N") and pdf_value in annot.AP.get("/N"):
                         annot.AS = pdf_value
                     else:
                         annot.AS = PdfName("Off")
 
-            if not annot.T:
+            field_name = PdfString.decode(annot.T) if annot.T else None
+            target = annot
+            if field_name is None and parent and parent.get("/T"):
+                field_name = PdfString.decode(parent.get("/T"))
+                target = parent
+            if not field_name:
                 continue
-            field_name = PdfString.decode(annot.T)
-            if field_name not in fields:
+            if field_name not in fields and (not button_values or field_name not in button_values):
                 continue
-            value = fields[field_name]
+            value = fields.get(field_name)
+            if value is None and button_values and field_name in button_values:
+                value = button_values[field_name]
             if value is None:
                 continue
 
-            field_type = annot.FT or annot.get("/FT")
+            field_type = target.FT or target.get("/FT") or annot.FT or annot.get("/FT")
             pdf_value = to_pdf_value(value)
-            annot.V = pdf_value
+            target.V = pdf_value
+            if parent and parent.get("/T") and PdfString.decode(parent.get("/T")) == field_name:
+                parent.V = pdf_value
             if field_type == PdfName("Btn"):
                 annot.AS = pdf_value
             elif field_type == PdfName("Ch"):
                 if choice_indices and field_name in choice_indices:
-                    annot.I = [PdfObject(str(choice_indices[field_name]))]
+                    target.I = [PdfObject(str(choice_indices[field_name]))]
             else:
                 if annot.AP:
                     annot.AP = None
@@ -616,8 +433,29 @@ def _fill_pdf(fields, horizon_value=None, profile_value=None, choice_indices=Non
     return output.getvalue()
 
 
+def _split_client_name(full_name: str):
+    if not full_name:
+        return "", ""
+    parts = full_name.split()
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], " ".join(parts[1:])
+
+
+def _file_safe_name(value: str) -> str:
+    cleaned = _normalize_label(value).replace(" ", "_")
+    return cleaned or "investisseur"
+
+
+def _is_av_contract(value: str) -> bool:
+    if not value:
+        return False
+    upper = value.upper()
+    return "AV" in upper or "ASSURANCE" in upper
+
+
 def main():
-    st.title("Fiche conseil PER")
+    st.title("Fiche conseil Assurance-vie")
 
     ss.pop("arbitrage_manual_custom_funds", None)
     ss.pop("arbitrage_custom_name", None)
@@ -630,8 +468,8 @@ def main():
 
     df_contrat_selected = ss["df_contrat_selected"]
     contrat_enveloppe = df_contrat_selected["Enveloppe"].iloc[0] if "Enveloppe" in df_contrat_selected.columns else ""
-    if contrat_enveloppe != "PER":
-        st.warning("La fiche PER est reservee aux contrats PER. Le contrat selectionne n'est pas un PER.")
+    if not _is_av_contract(str(contrat_enveloppe)):
+        st.warning("La fiche Assurance-vie est reservee aux contrats d'assurance-vie. Le contrat selectionne n'est pas une assurance-vie.")
         return
 
     contract_options = _load_contract_options()
@@ -647,22 +485,19 @@ def main():
 
     st.subheader("Informations contractuelles")
     col1, col2 = st.columns(2)
+    titulaire = str(df_contrat_selected["Titulaire(s)"].iloc[0]) if "Titulaire(s)" in df_contrat_selected.columns else ""
+    default_nom, default_prenom = _split_client_name(titulaire)
     with col1:
-        invest1 = st.text_input(
-            "Investisseur principal",
-            value=str(df_contrat_selected["Titulaire(s)"].iloc[0]) if "Titulaire(s)" in df_contrat_selected.columns else ""
-        )
-        investor_file_label = _normalize_label(invest1).replace(" ", "_")
-        if not investor_file_label:
-            investor_file_label = "investisseur"
-        numcontrat = st.text_input(
-            "Numero de contrat",
-            value=str(df_contrat_selected["N° de contrat"].iloc[0]) if "N° de contrat" in df_contrat_selected.columns else ""
-        )
+        nom_client = st.text_input("Nom du client", value=default_nom)
+        prenom_client = st.text_input("Prenom du client", value=default_prenom)
     with col2:
         compagnie = st.text_input(
             "Compagnie",
             value=str(df_contrat_selected["Partenaire"].iloc[0]) if "Partenaire" in df_contrat_selected.columns else ""
+        )
+        numcontrat = st.text_input(
+            "Numero de contrat",
+            value=str(df_contrat_selected["N° de contrat"].iloc[0]) if "N° de contrat" in df_contrat_selected.columns else ""
         )
 
     contrat_select_label = st.selectbox(
@@ -681,46 +516,23 @@ def main():
     with col5:
         raisonsociale = st.text_input("Raison sociale", value=str(mandataire_defaults.get("raison_sociale", "")))
 
-    st.subheader("Motivations PER")
+    st.subheader("Motivations")
     objectives = st.multiselect(
-        "Objectifs (bonnes pratiques PER)",
-        [
-            "Optimiser sa fiscalite",
-            "Optimiser la rentabilite de ses placements",
-            "Aider ses enfants",
-            "Proteger le conjoint survivant",
-            "Proteger ses proches",
-            "Preparer sa retraite",
-            "Financer un achat immobilier",
-            "Preparer la transmission de son patrimoine",
-            "Preparer la transmission de son entreprise",
-            "Obtenir des revenus complementaires",
-            "Se constituer un patrimoine",
-            "Se constituer une epargne de precaution",
-            "Placer des liquidites a court terme",
-            "Se premunir contre les accidents de la vie",
-        ],
-        default=["Preparer sa retraite", "Optimiser sa fiscalite"]
+        "Objectifs",
+        list(OBJECTIVE_FIELD_MAP.keys()),
+        default=["Optimiser la rentabilite de ses placements", "Optimiser sa fiscalite"]
     )
 
-    with st.expander("Textes enveloppe et contrat", expanded=False):
+    with st.expander("Texte enveloppe", expanded=False):
         envelope_text = st.text_area(
             "Votre enveloppe financiere",
             value=_build_envelope_text(objectives),
             height=220
         )
 
-        contract_text = st.text_area(
-            "Votre contrat",
-            value=_build_contract_text(contrat_select_label),
-            height=180
-        )
-
     st.subheader("Operation et allocation")
     df_allocations_client = ss.get("df_allocations_client", pd.DataFrame())
-    df_portfolio = ss.get("df_portfolio", pd.DataFrame())
     operation_type = "Arbitrage"
-    arbitrage_mode = "Arbitrage libre"
     tab_manual, tab_pdf = st.tabs(["Arbitrage manuel", "Extraction PDF (Gemini)"])
     with tab_manual:
         st.write("Definissez les desinvestissements depuis les fonds du contrat, puis selectionnez les fonds a investir.")
@@ -836,7 +648,6 @@ def main():
             if use_default:
                 multiselect_kwargs["default"] = selected_default
             selected_labels = st.multiselect(**multiselect_kwargs)
-
             selected_df = available_funds_df[available_funds_df["Label"].isin(selected_labels)][["Nom", "Code ISIN"]].drop_duplicates()
 
             if selected_df.empty:
@@ -935,6 +746,7 @@ def main():
                         st.error(str(exc))
             if "arbitrage_extraction" in ss:
                 st.json(ss["arbitrage_extraction"], expanded=False)
+
     montant_operation = ""
     periodicite = ""
 
@@ -961,40 +773,94 @@ def main():
 
     st.subheader("Profil de risque")
     profile_choice = st.selectbox(
-        "Profil",
+        "Profil accepte",
+        ["Securise", "Prudent", "Equilibre", "Dynamique"],
+        index=2
+    )
+    profile_target = st.selectbox(
+        "Profil allocation cible",
         ["Securise", "Prudent", "Equilibre", "Dynamique"],
         index=2
     )
 
-    if operation_type != "Arbitrage":
-        desinvest_rows = []
-        invest_rows = []
-    allocation_text_default = _build_allocation_text(
-        operation_type,
-        montant_operation,
-        periodicite,
-        profile_choice,
-        desinvest_rows,
-        invest_rows,
-        arbitrage_mode,
+    st.subheader("Horizon")
+    horizon_labels = [
+        "< 2 ans",
+        "entre 2 et 5 ans",
+        "entre 5 et 8 ans",
+        "> 8 ans",
+        "Retraite",
+    ]
+    horizon_choice = st.selectbox(
+        "Horizon d'investissement",
+        horizon_labels,
+        index=2,
     )
 
-    if manual_desinvest_rows or manual_invest_rows:
-        ss["allocation_text"] = allocation_text_default
-    elif operation_type == "Arbitrage" and "arbitrage_extraction" in ss:
-        ss["allocation_text"] = allocation_text_default
-    elif "allocation_text" not in ss:
-        ss["allocation_text"] = allocation_text_default
-
-    allocation_text = st.text_area(
-        "Votre allocation d'actifs et operation",
-        key="allocation_text",
-        placeholder="Decrire l'allocation proposee (supports et pourcentages).",
-        height=180
+    st.subheader("Objectif d'arbitrage")
+    st.subheader("Nature de l'arbitrage")
+    nature_choices = st.multiselect(
+        "Nature",
+        [
+            "Modification de la selection des supports",
+            "Reequilibrage du portefeuille",
+            "Autres",
+        ],
+        default=["Modification de la selection des supports"],
     )
+    autres_nature = ""
+    if "Autres" in nature_choices:
+        autres_nature = st.text_input("Autres (preciser)", value="")
+
+    objectif_options = _load_choice_options("objectifarbitrage")
+    objectif_labels = [label for label, _value in objectif_options]
+    default_objectif = "Changement support(s) / Optimisation de la sélection des supports"
+    default_objectif_idx = objectif_labels.index(default_objectif) if default_objectif in objectif_labels else 0
+    objectif_label = st.selectbox(
+        "Objectif",
+        options=objectif_labels,
+        index=default_objectif_idx if objectif_labels else None
+    )
+    justif_kwargs = {
+        "label": "Justification",
+        "height": 120,
+        "key": "av_justif_arbitrage",
+    }
+    if "av_justif_arbitrage" not in ss:
+        justif_kwargs["value"] = ""
+    justif_arbitrage = st.text_area(**justif_kwargs)
+
+    option_choices = _load_choice_options("options")
+    option_labels = [label for label, _value in option_choices]
+    option_label = st.selectbox(
+        "Option",
+        options=option_labels,
+        index=0 if option_labels else None
+    )
+
+    desinvest_text = _format_support_lines(desinvest_rows, "Desinvest %")
+    invest_text = _format_support_lines(invest_rows, "Invest %")
+    allocation_text = "\n".join([part for part in [desinvest_text, invest_text] if part])
+
+    st.subheader("Apercu fiche conseil")
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.text_area(
+            "Supports desinvestis (fiche conseil)",
+            value=desinvest_text,
+            height=140,
+            disabled=True,
+        )
+    with col_right:
+        st.text_area(
+            "Supports investis (fiche conseil)",
+            value=invest_text,
+            height=140,
+            disabled=True,
+        )
 
     if not TEMPLATE_PATH.exists():
-        st.error("Le fichier PDF modele est introuvable. Verifiez le chemin pdf/PER/Fiche Conseil Vierge Courtage PPv3.pdf.")
+        st.error("Le fichier PDF modele est introuvable. Verifiez le chemin pdf/AV/Fiche Conseil Assurance Vie Arbitrage 03-25.pdf.")
         return
 
     contract_value = ""
@@ -1005,45 +871,110 @@ def main():
             contract_index = idx
             break
 
-    form_fields = {
-        "invest1": invest1,
-        "numcontrat": numcontrat,
-        "compagnie": compagnie,
-        "nomcslt": nomcslt,
-        "prenomcslt": prenomcslt,
-        "raisonsociale": raisonsociale,
-        "Text1": envelope_text,
-        "Text2": contract_text,
-        "Text3": allocation_text,
-        "Text4": "",
+    choice_indices = {}
+    if contract_index is not None:
+        choice_indices["choixcontrat"] = contract_index
+
+    if objectif_label in objectif_labels:
+        choice_indices["objectifarbitrage"] = objectif_labels.index(objectif_label)
+    if option_label in option_labels:
+        choice_indices["options"] = option_labels.index(option_label)
+
+    profil_map = {
+        "Securise": "/Choix1",
+        "Prudent": "/Choix2",
+        "Equilibre": "/Choix3",
+        "Dynamique": "/Choix4",
     }
+    profilcible_map = {
+        "Securise": "/1",
+        "Prudent": "/2",
+        "Equilibre": PROFILE_BALANCED_VALUE,
+        "Dynamique": "/4",
+    }
+    profil_code_map = {
+        "Securise": "1",
+        "Prudent": "2",
+        "Equilibre": "3",
+        "Dynamique": "4",
+    }
+
+    objectif_value = dict(objectif_options).get(objectif_label, objectif_label)
+
+    form_fields = {
+        "Nomclient": nom_client,
+        "Prenomclient": prenom_client,
+        "Nomclient2": nom_client,
+        "Prenomclient2": prenom_client,
+        "Nomconsultant": nomcslt,
+        "Prenomconsultant": prenomcslt,
+        "Raisonsociale": raisonsociale,
+        "compagnie": compagnie,
+        "enveloppe": numcontrat,
+        "Profilaccepte": profile_choice,
+        "Profilallocode": profil_code_map.get(profile_target, "3"),
+        "horizonretraite": horizon_choice,
+        "objectifarbitrage": objectif_value or "",
+        "justifmotifarbitrage": justif_arbitrage,
+        "justifautre": justif_arbitrage,
+        "Justifoption": autres_nature,
+        "RemarqueGestionlibre": allocation_text,
+        "TexteGestionPilote": allocation_text,
+        "TexteGestionProfile": allocation_text,
+    }
+
+    if contract_value:
+        form_fields["choixcontrat"] = contract_value
+    if option_label:
+        option_value = dict(option_choices).get(option_label, option_label)
+        form_fields["options"] = option_value
+
+    desinvest_text = _format_support_lines(desinvest_rows, "Desinvest %")
+    invest_text = _format_support_lines(invest_rows, "Invest %")
+    form_fields["JustifVC"] = desinvest_text
+    form_fields["JustifVC2"] = invest_text
+    form_fields["Justifdyna"] = desinvest_text
+    form_fields["Justidyna2"] = invest_text
+
+    form_fields["Profilacceptecode"] = profil_code_map.get(profile_choice, "3")
 
     for objective in objectives:
         field_name = OBJECTIVE_FIELD_MAP.get(objective)
         if field_name:
-            form_fields[field_name] = "/1"
+            form_fields[field_name] = "/Oui"
 
-    if contract_value:
-        form_fields["nomcontrat"] = contract_value
-
-    if st.button("Generer la fiche PER"):
-        profile_value = {
-            "Securise": "/1",
-            "Prudent": "/2",
-            "Equilibre": PROFILE_BALANCED_VALUE,
-            "Dynamique": "/4",
-        }.get(profile_choice, PROFILE_BALANCED_VALUE)
-        choice_indices = {"nomcontrat": contract_index} if contract_index is not None else None
+    if st.button("Generer la fiche Assurance-vie"):
+        horizon_map = {
+            "< 2 ans": "/1",
+            "entre 2 et 5 ans": "/2",
+            "entre 5 et 8 ans": "/3",
+            "> 8 ans": "/4",
+            "Retraite": "/5",
+        }
+        button_values = {
+            "profil": profil_map.get(profile_choice, "/Choix3"),
+            "profilcible": profilcible_map.get(profile_target, PROFILE_BALANCED_VALUE),
+            "horizon": horizon_map.get(horizon_choice, "/3"),
+            "SelectionGestionlibre": "/1",
+        }
+        if "Modification de la selection des supports" in nature_choices:
+            button_values["Selectop"] = "/2"
+        if "Reequilibrage du portefeuille" in nature_choices:
+            button_values["Selectop2"] = "/5"
+        if "Autres" in nature_choices:
+            button_values["Selectop3"] = "/6"
         pdf_bytes = _fill_pdf(
             form_fields,
-            horizon_value=HORIZON_RETIREMENT_VALUE,
-            profile_value=profile_value,
+            button_values=button_values,
             choice_indices=choice_indices,
         )
+        investor_file_label = "_".join(
+            part for part in [_file_safe_name(prenom_client), _file_safe_name(nom_client)] if part
+        )
         st.download_button(
-            label="Telecharger la fiche PER remplie",
+            label="Telecharger la fiche Assurance-vie remplie",
             data=pdf_bytes,
-            file_name=f"Fiche_PER_{investor_file_label}_{numcontrat or 'contrat'}.pdf",
+            file_name=f"Fiche_AV_{investor_file_label}.pdf",
             mime="application/pdf"
         )
 
