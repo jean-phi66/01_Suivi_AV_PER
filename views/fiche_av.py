@@ -536,6 +536,7 @@ def main():
     tab_manual, tab_pdf = st.tabs(["Arbitrage manuel", "Extraction PDF (Gemini)"])
     with tab_manual:
         st.write("Definissez les desinvestissements depuis les fonds du contrat, puis selectionnez les fonds a investir.")
+        total_reinvest = 0.0
         if df_allocations_client.empty:
             st.info("Aucun fonds du contrat n'est charge. Importez les allocations pour pre-remplir le tableau.")
             ss["arbitrage_manual_desinvest_rows"] = []
@@ -669,10 +670,14 @@ def main():
                     invest_base["Invest %"] = invest_base["Invest %_prev"].fillna(invest_base["Invest %"])
                     invest_base.drop(columns=["Invest %_prev"], inplace=True)
 
+                invest_base["Somme reinvestie (EUR)"] = (
+                    pd.to_numeric(invest_base["Invest %"], errors="coerce").fillna(0) * total_reinvest / 100
+                )
+
                 invest_df = st.data_editor(
                     invest_base,
                     hide_index=True,
-                    disabled=["Support", "Code ISIN"],
+                    disabled=["Support", "Code ISIN", "Somme reinvestie (EUR)"],
                     key="arbitrage_manual_invest_table",
                     column_config={
                         "Invest %": st.column_config.NumberColumn(
@@ -682,10 +687,39 @@ def main():
                             max_value=100,
                             step=1,
                             format="%d %%",
+                        ),
+                        "Somme reinvestie (EUR)": st.column_config.NumberColumn(
+                            "Somme reinvestie (EUR)",
+                            help="Montant reinvesti en EUR en fonction du pourcentage saisi",
+                            format="%.2f EUR",
                         )
                     },
                 )
+
+                prev_invest_df = ss.get("arbitrage_manual_invest_df", pd.DataFrame())
+                invest_df["Somme reinvestie (EUR)"] = (
+                    pd.to_numeric(invest_df["Invest %"], errors="coerce").fillna(0) * total_reinvest / 100
+                )
                 ss["arbitrage_manual_invest_df"] = invest_df
+
+                should_rerun = False
+                if not prev_invest_df.empty:
+                    prev_compare = prev_invest_df[["Support", "Code ISIN", "Invest %"]].copy()
+                    prev_compare["Invest %"] = pd.to_numeric(prev_compare["Invest %"], errors="coerce").fillna(0)
+
+                    curr_compare = invest_df[["Support", "Code ISIN", "Invest %"]].copy()
+                    curr_compare["Invest %"] = pd.to_numeric(curr_compare["Invest %"], errors="coerce").fillna(0)
+
+                    compare_df = curr_compare.merge(
+                        prev_compare,
+                        on=["Support", "Code ISIN"],
+                        how="outer",
+                        suffixes=("_curr", "_prev"),
+                    ).fillna(0)
+                    should_rerun = not (compare_df["Invest %_curr"] - compare_df["Invest %_prev"]).abs().le(1e-9).all()
+
+                if should_rerun:
+                    st.rerun()
 
                 invest_rows = []
                 for _, row in invest_df.iterrows():
@@ -916,7 +950,7 @@ def main():
         "horizonretraite": horizon_choice,
         "objectifarbitrage": objectif_value or "",
         "justifmotifarbitrage": justif_arbitrage,
-        "justifautre": justif_arbitrage,
+        "justifautre": autres_nature,
         "Justifoption": autres_nature,
         "RemarqueGestionlibre": allocation_text,
         "TexteGestionPilote": allocation_text,
