@@ -66,7 +66,8 @@ st.success(
 )
 
 # Fonction pour calculer la frontière efficiente
-def calculate_efficient_frontier(df_fonds_list, fonds_list):
+@st.cache_data
+def calculate_efficient_frontier(df_fonds_list, fonds_list, date_debut_key, date_fin_key):
     """Calcule la frontière efficiente avec optimisation et matrice de covariance"""
     if len(fonds_list) < 2:
         return None, None
@@ -170,6 +171,94 @@ def calculate_efficient_frontier(df_fonds_list, fonds_list):
         
     except Exception as e:
         return None, None
+
+# Fonction pour calculer la position de l'allocation courante
+def calculate_current_allocation(df_fonds_list, fonds_list, df_alloc, fonds_names_to_isin=None):
+    """Calcule le rendement et volatilité de l'allocation courante + pondérations"""
+    try:
+        # Récupérer les poids actuels des fonds
+        if df_alloc.empty or 'Code ISIN' not in df_alloc.columns or 'Encours en €' not in df_alloc.columns:
+            return None, None, None
+        
+        # Mapping des noms de fonds vers ISINs si nécessaire
+        fonds_to_isin = {}
+        for fonds in fonds_list:
+            df_f = df_fonds_list[df_fonds_list['Nom_fonds'] == fonds]
+            if len(df_f) > 0 and 'Code ISIN' in df_f.columns:
+                isin = df_f['Code ISIN'].iloc[0]
+                if pd.notna(isin):
+                    fonds_to_isin[fonds] = isin
+        
+        if not fonds_to_isin:
+            return None, None, None
+        
+        # Récupérer les encours pour ces fonds (sur allocations filtrées uniquement)
+        isins = list(fonds_to_isin.values())
+        alloc_fonds = df_alloc[df_alloc['Code ISIN'].isin(isins)]
+        
+        if alloc_fonds.empty:
+            return None, None, None
+        
+        # Calculer les poids (encours / total DES ALLOCATIONS FILTREES)
+        total_encours = df_alloc['Encours en €'].sum()
+        if total_encours <= 0:
+            return None, None, None
+        
+        weights_abs_dict = {}
+        for fonds, isin in fonds_to_isin.items():
+            fonds_encours = alloc_fonds[alloc_fonds['Code ISIN'] == isin]['Encours en €'].sum()
+            weights_abs_dict[fonds] = fonds_encours / total_encours
+        
+        # Calculer les rendements et volatilités des fonds
+        rendements_dict = {}
+        for fonds in fonds_list:
+            df_f = df_fonds_list[df_fonds_list['Nom_fonds'] == fonds].sort_values('Date')
+            if len(df_f) > 1:
+                rends = df_f['Rendement'].dropna().values
+                if len(rends) > 2:
+                    rendements_dict[fonds] = rends
+        
+        if len(rendements_dict) < len(fonds_to_isin):
+            return None, None, None
+        
+        # Aligner à la même longueur
+        min_len = min(len(r) for r in rendements_dict.values())
+        if min_len < 2:
+            return None, None, None
+        
+        # Construire la matrice de rendements pour les fonds avec données
+        fonds_keys = list(rendements_dict.keys())
+        rendements_array = np.array([rendements_dict[f][-min_len:] for f in fonds_keys])
+        
+        # Rendements annualisés
+        perf_cumulees = np.prod(1 + rendements_array, axis=1)
+        mean_returns_annualized = ((perf_cumulees ** (365 / min_len)) - 1)
+        
+        # Matrice de covariance
+        cov_matrix = np.cov(rendements_array)
+        
+        # Recalculer les poids en excluant les fonds sans historique
+        total_weight_with_data = sum(weights_abs_dict.get(f, 0) for f in fonds_keys)
+        if total_weight_with_data <= 0:
+            return None, None, None
+        
+        weights_normalized = np.array([weights_abs_dict.get(f, 0) / total_weight_with_data for f in fonds_keys])
+        
+        # Rendement et volatilité du portefeuille courant
+        port_ret = np.dot(weights_normalized, mean_returns_annualized)
+        port_var = np.dot(weights_normalized.T, np.dot(cov_matrix * 252, weights_normalized))
+        port_vol = np.sqrt(max(port_var, 0))
+        
+        # Créer un dataframe des pondérations
+        poids_df = pd.DataFrame({
+            'Fonds': fonds_keys,
+            'Pondération (%)': [w * 100 for w in weights_normalized]
+        }).sort_values('Pondération (%)', ascending=False)
+        
+        return port_vol * 100, port_ret * 100, poids_df
+        
+    except Exception as e:
+        return None, None, None
 
 # Mettre les onglets TOUT EN HAUT et piloter tout l'affichage par onglet
 tab_man, tab_auto, tab_contrat = st.tabs(["Sélection manuelle", "Sélection auto (Top N)", "Par contrat"])
@@ -379,7 +468,7 @@ with tab_man:
             ))
         
         # Ajouter la frontière efficiente
-        frontier_vols, frontier_rets = calculate_efficient_frontier(df_all_perfs, fonds_selectionnes)
+        frontier_vols, frontier_rets = calculate_efficient_frontier(df_all_perfs, fonds_selectionnes, str(date_debut), str(date_fin))
         if frontier_vols is not None and frontier_rets is not None and len(frontier_vols) > 0:
             # Trier par volatilité pour tracer correctement
             sorted_indices = np.argsort(frontier_vols)
@@ -395,6 +484,18 @@ with tab_man:
                 hovertemplate='Volatilité: %{x:.2f}%<br>Rendement annualisé: %{y:.2f}%<extra></extra>'
             ))
         
+        # Ajouter l'allocation courante
+        alloc_vol, alloc_ret, poids_df = calculate_current_allocation(df_all_perfs, fonds_selectionnes, df_alloc_filt)
+        if alloc_vol is not None and alloc_ret is not None:
+            fig_scatter.add_trace(go.Scatter(
+                x=[alloc_vol],
+                y=[alloc_ret],
+                mode='markers',
+                name='Allocation courante',
+                marker=dict(size=20, color='green', symbol='star'),
+                hovertemplate='<b>Allocation courante</b><br>Volatilité: %{x:.2f}%<br>Rendement annualisé: %{y:.2f}%<extra></extra>'
+            ))
+        
         fig_scatter.update_layout(
             title="Rendement vs Volatilité (annualisés)",
             xaxis_title="Volatilité annualisée (%)",
@@ -404,6 +505,19 @@ with tab_man:
             showlegend=False
         )
         st.plotly_chart(fig_scatter, use_container_width=True)
+        
+        # Afficher les pondérations
+        if poids_df is not None and not poids_df.empty:
+            with st.expander("📊 Pondérations des fonds (allocation courante)"):
+                st.dataframe(
+                    poids_df,
+                    column_config={
+                        "Fonds": "Fonds",
+                        "Pondération (%)": st.column_config.NumberColumn("Pondération (%)", format="%.2f")
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
 
     # Données détaillées (manuel)
     with st.expander("📊 Voir les données de la courbe (sélection manuelle)"):
@@ -638,7 +752,12 @@ with tab_auto:
                         ))
                     
                     # Ajouter la frontière efficiente (auto)
-                    frontier_vols_a, frontier_rets_a = calculate_efficient_frontier(df_all_perfs_auto, df_all_perfs_auto['Nom_fonds'].unique().tolist())
+                    frontier_vols_a, frontier_rets_a = calculate_efficient_frontier(
+                        df_all_perfs_auto,
+                        df_all_perfs_auto['Nom_fonds'].unique().tolist(),
+                        str(date_debut_a),
+                        str(date_fin_a)
+                    )
                     if frontier_vols_a is not None and frontier_rets_a is not None and len(frontier_vols_a) > 0:
                         sorted_indices_a = np.argsort(frontier_vols_a)
                         frontier_vols_sorted_a = [frontier_vols_a[i] for i in sorted_indices_a]
@@ -653,6 +772,19 @@ with tab_auto:
                             hovertemplate='Volatilité: %{x:.2f}%<br>Rendement annualisé: %{y:.2f}%<extra></extra>'
                         ))
                     
+                    # Ajouter l'allocation courante (auto)
+                    fonds_auto_list = df_all_perfs_auto['Nom_fonds'].unique().tolist()
+                    alloc_vol_a, alloc_ret_a, poids_df_a = calculate_current_allocation(df_all_perfs_auto, fonds_auto_list, df_alloc_filt)
+                    if alloc_vol_a is not None and alloc_ret_a is not None:
+                        fig_scatter_a.add_trace(go.Scatter(
+                            x=[alloc_vol_a],
+                            y=[alloc_ret_a],
+                            mode='markers',
+                            name='Allocation courante',
+                            marker=dict(size=20, color='green', symbol='star'),
+                            hovertemplate='<b>Allocation courante</b><br>Volatilité: %{x:.2f}%<br>Rendement annualisé: %{y:.2f}%<extra></extra>'
+                        ))
+                    
                     fig_scatter_a.update_layout(
                         title="Rendement vs Volatilité (annualisés)",
                         xaxis_title="Volatilité annualisée (%)",
@@ -662,6 +794,19 @@ with tab_auto:
                         showlegend=False
                     )
                     st.plotly_chart(fig_scatter_a, use_container_width=True)
+                    
+                    # Afficher les pondérations (auto)
+                    if poids_df_a is not None and not poids_df_a.empty:
+                        with st.expander("📊 Pondérations des fonds (allocation courante)"):
+                            st.dataframe(
+                                poids_df_a,
+                                column_config={
+                                    "Fonds": "Fonds",
+                                    "Pondération (%)": st.column_config.NumberColumn("Pondération (%)", format="%.2f")
+                                },
+                                hide_index=True,
+                                use_container_width=True
+                            )
 
                 # Statistiques par fonds (auto)
                 st.header("Statistiques de la période")
@@ -850,7 +995,12 @@ with tab_contrat:
             ))
         
         # Ajouter la frontière efficiente (contrat)
-        frontier_vols_c, frontier_rets_c = calculate_efficient_frontier(df_perfs_ctr, df_perfs_ctr['Nom_fonds'].unique().tolist())
+        frontier_vols_c, frontier_rets_c = calculate_efficient_frontier(
+            df_perfs_ctr,
+            df_perfs_ctr['Nom_fonds'].unique().tolist(),
+            str(date_debut_c),
+            str(date_fin_c)
+        )
         if frontier_vols_c is not None and frontier_rets_c is not None and len(frontier_vols_c) > 0:
             sorted_indices_c = np.argsort(frontier_vols_c)
             frontier_vols_sorted_c = [frontier_vols_c[i] for i in sorted_indices_c]
@@ -865,6 +1015,19 @@ with tab_contrat:
                 hovertemplate='Volatilité: %{x:.2f}%<br>Rendement annualisé: %{y:.2f}%<extra></extra>'
             ))
         
+        # Ajouter l'allocation courante (contrat)
+        fonds_ctr_list = df_perfs_ctr['Nom_fonds'].unique().tolist()
+        alloc_vol_c, alloc_ret_c, poids_df_c = calculate_current_allocation(df_perfs_ctr, fonds_ctr_list, df_alloc_filt)
+        if alloc_vol_c is not None and alloc_ret_c is not None:
+            fig_scatter_c.add_trace(go.Scatter(
+                x=[alloc_vol_c],
+                y=[alloc_ret_c],
+                mode='markers',
+                name='Allocation courante',
+                marker=dict(size=20, color='green', symbol='star'),
+                hovertemplate='<b>Allocation courante</b><br>Volatilité: %{x:.2f}%<br>Rendement annualisé: %{y:.2f}%<extra></extra>'
+            ))
+        
         fig_scatter_c.update_layout(
             title="Rendement vs Volatilité (annualisés)",
             xaxis_title="Volatilité annualisée (%)",
@@ -874,6 +1037,19 @@ with tab_contrat:
             showlegend=False
         )
         st.plotly_chart(fig_scatter_c, use_container_width=True)
+        
+        # Afficher les pondérations (contrat)
+        if poids_df_c is not None and not poids_df_c.empty:
+            with st.expander("📊 Pondérations des fonds (allocation courante)"):
+                st.dataframe(
+                    poids_df_c,
+                    column_config={
+                        "Fonds": "Fonds",
+                        "Pondération (%)": st.column_config.NumberColumn("Pondération (%)", format="%.2f")
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
 
     # Statistiques par fonds
     st.header("Statistiques de la période")

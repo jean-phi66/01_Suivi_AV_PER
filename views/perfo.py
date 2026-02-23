@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit import session_state as ss
 
 import pandas as pd
+import numpy as np
 
 import plotly.express as px
 from waterfall_graphs import generate_contrats_waterfall, generate_allocations_waterfall
@@ -235,3 +236,134 @@ if 'Montant total des versements bruts' in df_current_for_contract.columns:
 
 ss['fig_evol'] = fig_evol
 st.plotly_chart(fig_evol, use_container_width=True)
+
+# --- Évolution des fonds du contrat (base 100) ---
+st.divider()
+st.subheader("Évolution des fonds du contrat (base 100)")
+
+# Charger le fichier de performances des fonds
+import os, glob
+fonds_dir = "/Users/jean-philippenavarro/Documents/10_CGP/20_Outils - Simulateurs/01_Suivi_AV_PER/00_Exports/3_Fonds"
+top_files = []
+try:
+    top_files = glob.glob(os.path.join(fonds_dir, "*Top*.csv"))
+except Exception:
+    top_files = []
+
+if not top_files:
+    st.info("Aucun fichier de performance fonds trouvé dans 00_Exports/3_Fonds.")
+else:
+    # Prendre le plus récent par mtime
+    latest_file = max(top_files, key=os.path.getmtime)
+    try:
+        df_perfs = pd.read_csv(latest_file, sep=';', decimal=',', encoding='latin-1')
+    except UnicodeDecodeError:
+        df_perfs = pd.read_csv(latest_file, sep=';', decimal=',', encoding='utf-8', errors='ignore')
+
+    # Dates et rendements
+    df_perfs['Date'] = pd.to_datetime(df_perfs['Date'], format='%d/%m/%Y', errors='coerce')
+    if df_perfs['Rendement'].dtype == 'object':
+        df_perfs['Rendement'] = df_perfs['Rendement'].astype(str).str.replace(',', '.').astype(float)
+    df_perfs = df_perfs.sort_values('Date')
+
+    # ISIN du contrat sélectionné
+    if 'Numéro contrat' in df_allocations.columns:
+        df_alloc_ctr = df_allocations[df_allocations['Numéro contrat'] == contrat]
+    else:
+        df_alloc_ctr = pd.DataFrame()
+
+    if df_alloc_ctr.empty or 'Code ISIN' not in df_alloc_ctr.columns:
+        st.warning("Aucun fonds détecté pour ce contrat dans les allocations.")
+    else:
+        isins_ctr = set(df_alloc_ctr['Code ISIN'].dropna().unique())
+        # Mapping ISIN -> Nom depuis fichier perfs
+        map_isin_nom = (df_perfs[['Code ISIN','Nom']]
+                        .dropna(subset=['Code ISIN'])
+                        .drop_duplicates()
+                        .set_index('Code ISIN')['Nom'])
+
+        isins_dispo = [i for i in isins_ctr if i in set(df_perfs['Code ISIN'].dropna().unique())]
+        manq = isins_ctr.difference(isins_dispo)
+        if manq:
+            st.warning(f"{len(manq)} fonds du contrat sans historique dans {os.path.basename(latest_file)}: {', '.join(list(manq)[:5])}{'…' if len(manq)>5 else ''}")
+
+        if len(isins_dispo) == 0:
+            st.info("Aucun des fonds du contrat n'est présent dans le fichier de performances.")
+        else:
+            # Sélecteur de période (borné au dataset)
+            min_date = df_perfs['Date'].min().date()
+            max_date = df_perfs['Date'].max().date()
+            default_start = (df_perfs['Date'].max() - pd.DateOffset(years=1)).date()
+            if default_start < min_date:
+                default_start = min_date
+            c1, c2 = st.columns(2)
+            with c1:
+                date_debut = st.date_input("Date de début", value=default_start, min_value=min_date, max_value=max_date, key="perfo_ctr_start")
+            with c2:
+                date_fin = st.date_input("Date de fin", value=max_date, min_value=min_date, max_value=max_date, key="perfo_ctr_end")
+            if date_debut >= date_fin:
+                st.error("La date de début doit être antérieure à la date de fin")
+            else:
+                df_sel = df_perfs[df_perfs['Code ISIN'].isin(isins_dispo)]
+                df_periode = df_sel[(df_sel['Date'] >= pd.to_datetime(date_debut)) & (df_sel['Date'] <= pd.to_datetime(date_fin))].copy()
+
+                perf_list = []
+                for isin in isins_dispo:
+                    d = df_periode[df_periode['Code ISIN'] == isin].copy()
+                    if d.empty:
+                        continue
+                    d['Valeur_cumul'] = (1 + d['Rendement']).cumprod()
+                    base = d['Valeur_cumul'].iloc[0]
+                    d['Performance_base_100'] = (d['Valeur_cumul'] / base) * 100
+                    d['Nom_fonds'] = map_isin_nom.get(isin, isin)
+                    perf_list.append(d)
+
+                if len(perf_list) == 0:
+                    st.info("Aucune donnée sur la période pour les fonds du contrat.")
+                else:
+                    df_perf_ctr = pd.concat(perf_list, ignore_index=True)
+                    fig = go.Figure()
+                    colors = px.colors.qualitative.T10
+                    for i, name in enumerate(sorted(df_perf_ctr['Nom_fonds'].unique())):
+                        d = df_perf_ctr[df_perf_ctr['Nom_fonds'] == name]
+                        fig.add_trace(go.Scatter(
+                            x=d['Date'], y=d['Performance_base_100'], mode='lines', name=name,
+                            line=dict(color=colors[i % len(colors)], width=2),
+                            hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Performance: %{y:.2f}<extra></extra>'
+                        ))
+                    fig.add_hline(y=100, line_dash='dash', line_color='gray', annotation_text='Base 100', annotation_position='right')
+                    fig.update_layout(title=f"Fonds du contrat {contrat} (base 100 au {date_debut.strftime('%d/%m/%Y')})", xaxis_title='Date', yaxis_title='Performance (base 100)', hovermode='x unified', height=500)
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    # Statistiques par fonds
+                    st.caption(f"Données: {os.path.basename(latest_file)}")
+                    for name in sorted(df_perf_ctr['Nom_fonds'].unique()):
+                        dff = df_perf_ctr[df_perf_ctr['Nom_fonds'] == name]
+                        st.subheader(name)
+                        c1, c2, c3, c4 = st.columns(4)
+                        perf_tot = dff['Performance_base_100'].iloc[-1] - 100
+                        nb_j = (date_fin - date_debut).days
+                        rend_ann = ((dff['Performance_base_100'].iloc[-1] / 100) ** (365 / nb_j) - 1) * 100 if nb_j > 0 else 0
+                        vola = dff['Rendement'].std() * np.sqrt(252) * 100
+                        with c1:
+                            st.metric("Performance totale", f"{perf_tot:.2f}%")
+                        with c2:
+                            st.metric("Rendement annualisé", f"{rend_ann:.2f}%")
+                        with c3:
+                            st.metric("Volatilité annualisée", f"{vola:.2f}%")
+                        with c4:
+                            st.metric("Nombre de jours", f"{len(dff)}")
+
+                    # Données + export
+                    with st.expander("📊 Voir les données"):
+                        df_disp = df_perf_ctr[['Date','Nom_fonds','Rendement','Performance_base_100']].copy()
+                        df_disp['Date'] = df_disp['Date'].dt.strftime('%d/%m/%Y')
+                        df_disp.columns = ['Date','Fonds','Rendement quotidien','Performance (base 100)']
+                        st.dataframe(df_disp, hide_index=True, use_container_width=True)
+                    with st.expander("📥 Télécharger (CSV)"):
+                        st.download_button(
+                            "💾 Télécharger",
+                            data=df_disp.to_csv(index=False, sep=';', decimal=','),
+                            file_name=f"performance_fonds_contrat_{contrat}_{pd.to_datetime(date_debut).strftime('%Y%m%d')}_{pd.to_datetime(date_fin).strftime('%Y%m%d')}.csv",
+                            mime='text/csv'
+                        )

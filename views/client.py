@@ -6,10 +6,25 @@ import pandas as pd
 df_contrats = ss['df_contrats']
 df_allocations = ss['df_allocations']
 
-# Select client
+# Defaults in session_state
+if 'client' not in ss:
+    ss['client'] = None
+if 'contrat' not in ss:
+    ss['contrat'] = None
+if 'df_contrat_selected' not in ss:
+    ss['df_contrat_selected'] = pd.DataFrame()
+if 'df_allocations_client' not in ss:
+    ss['df_allocations_client'] = pd.DataFrame()
+
+# Select client with persisted default
+clients_options = df_contrats.sort_values(by="Titulaire(s)")['Titulaire(s)'].unique().tolist()
+client_default = ss['client'] if ss['client'] in clients_options else (clients_options[0] if clients_options else None)
+client_index = clients_options.index(client_default) if client_default in clients_options else 0
 client = st.selectbox(
     'Sélectionner client',
-    df_contrats.sort_values(by="Titulaire(s)")['Titulaire(s)'].unique()
+    options=clients_options,
+    index=client_index,
+    key="client_select"
 )
 df_contrats_client = df_contrats[df_contrats['Titulaire(s)'] == client]
 
@@ -17,9 +32,14 @@ df_contrats_client = df_contrats[df_contrats['Titulaire(s)'] == client]
 st.dataframe(df_contrats_client[[
                       'Titulaire(s)', 'N° de contrat', 'Enveloppe', 'Partenaire', 'Valorisation']])
 st.divider()
+contrats_options = df_contrats_client['N° de contrat'].unique().tolist()
+contrat_default = ss['contrat'] if ss['contrat'] in contrats_options else (contrats_options[0] if contrats_options else None)
+contrat_index = contrats_options.index(contrat_default) if contrat_default in contrats_options else 0
 contrat = st.selectbox(
     'Sélectionner contrat',
-    df_contrats_client['N° de contrat'].unique()
+    options=contrats_options,
+    index=contrat_index,
+    key="contrat_select"
 )
 df_allocations_client = df_allocations[df_allocations['Numéro contrat'] == contrat]
 
@@ -31,16 +51,7 @@ st.dataframe(df_contrat_selected)
 
     
 
-# Update od session_state
-if 'client' not in ss:
-    ss['client'] = ''
-if 'contrat' not in ss:
-    ss['contrat'] = ''
-if 'df_contrat_selected' not in ss:
-    ss['df_contrat_selected'] = pd.DataFrame()
-if 'df_allocations_client' not in ss:
-    ss['df_allocations_client'] = df_allocations_client
-
+# Update session_state
 ss['client'] = client
 ss['contrat'] = contrat
 ss['df_contrat_selected'] = df_contrat_selected

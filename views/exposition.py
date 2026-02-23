@@ -3,6 +3,7 @@ from streamlit import session_state as ss
 
 import pandas as pd
 import numpy as np
+from report_generator import generate_exposition_filters_pdf
 
 df_allocations = ss['df_allocations']
 df_contrats = ss['df_contrats']
@@ -98,6 +99,20 @@ with tab2:
                 st.metric("Fonds recherchés", len(fonds_selectionnes))
             
             st.dataframe(contrats_resume)
+
+            # Export PDF des résultats de filtres
+            with st.container():
+                pdf_bytes = generate_exposition_filters_pdf(
+                    contrats_resume=contrats_resume,
+                    fonds_selectionnes=fonds_selectionnes,
+                    df_allocations=df_allocations
+                )
+                st.download_button(
+                    label="Exporter les résultats en PDF",
+                    data=pdf_bytes,
+                    file_name="Export_Exposition_Filtres.pdf",
+                    mime="application/pdf"
+                )
             
             # Section pour voir le détail des fonds sélectionnés dans chaque contrat
             st.subheader("Détail des fonds sélectionnés par contrat")

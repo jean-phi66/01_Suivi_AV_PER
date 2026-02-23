@@ -95,6 +95,12 @@ catalogue_fonds_page = st.Page(
     icon = '🗂️'
 )
 
+typage_fonds_page = st.Page(
+    page = 'views/typage_fonds_portefeuille.py',
+    title = "Typage des fonds du portefeuille",
+    icon = '🏷️'
+)
+
 test_page = st.Page(
     page = 'views/time_serie.py',
     title = 'TEST',
@@ -124,7 +130,7 @@ nav_items = {
         fonds_portefeuille_page,
         performance_fonds_page,
     ],
-    "PARAMETRES": [catalogue_fonds_page],
+    "PARAMETRES": [catalogue_fonds_page, typage_fonds_page],
     "Reporting": [batch_reports_page],
 }
 

@@ -1,0 +1,38 @@
+{
+  "category_mapping": {
+    "Action": "Actions",
+    "Action Grande Capitalisation": "Actions",
+    "Action Petite & Moyenne Capitalisation": "Actions",
+    "Alt - Long/Short Actions": "Long-Short",
+    "Autres": "Allocation flexible",
+    "Capital Risque": "Private Equity",
+    "Diversifié -Profil Prudent": "Allocation flexible",
+    "Diversifié Flexible": "Allocation flexible",
+    "Diversifié Profil Equilibre": "Allocation flexible",
+    "Fonds en Euros": "Fonds euros",
+    "Immobilier": "Immobilier",
+    "OPCI": "Immobilier",
+    "Obligations Court Terme": "Obligataire",
+    "Obligations Emprunts Privés": "Obligataire",
+    "Obligations Flexibles": "Obligataire",
+    "Obligations Haut Rendement": "Obligataire",
+    "Obligations à Echéance": "Obligataire",
+    "SCI": "Immobilier",
+    "Trésorerie Régulière": "Fonds euros",
+    "Trésorerie régulière": "Fonds euros"
+  },
+  "support_rules": [
+    {
+      "Mot-clé support": "exceltis",
+      "Catégorie simplifiée": "Produit structuré"
+    },
+    {
+      "Mot-clé support": "sci",
+      "Catégorie simplifiée": "Immobilier"
+    },
+    {
+      "Mot-clé support": "excel",
+      "Catégorie simplifiée": "Produit structuré"
+    }
+  ]
+}

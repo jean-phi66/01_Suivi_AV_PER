@@ -370,3 +370,152 @@ def generate_rapport_pdf(client_name, contrat_num, df_contrat_sel,
     if isinstance(pdf_data, bytearray):
         return bytes(pdf_data)
     return pdf_data
+
+
+def generate_exposition_filters_pdf(contrats_resume: pd.DataFrame,
+                                    fonds_selectionnes: list,
+                                    df_allocations: pd.DataFrame) -> bytes:
+    """
+    Génère un PDF tabulaire listant les résultats des filtres d'exposition.
+
+        Colonnes :
+            - Nom
+            - Prénom
+            - Type du contrat (utilise la colonne 'Prestation')
+            - Fonds du filtre (une ligne par fond dans la cellule)
+            - Encours des fonds sélectionnés
+            - % du contrat représenté par ces fonds
+
+    Args:
+        contrats_resume: DataFrame agrégé avec au moins les colonnes
+            ['Numéro contrat', 'Nom', 'Prénom', 'Prestation'].
+        fonds_selectionnes: Liste des fonds sélectionnés par l'utilisateur.
+        df_allocations: DataFrame des allocations contenant au moins
+            ['Numéro contrat', 'Support'].
+
+    Returns:
+        bytes: Le contenu du PDF.
+    """
+    # Création simple d'un PDF
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    # Titre
+    pdf.set_font("helvetica", "B", 14)
+    pdf.cell(0, 9, "Export Exposition - Résultats des filtres", ln=True)
+    pdf.set_font("helvetica", "", 10)
+    if fonds_selectionnes:
+        filtre_txt = ", ".join(fonds_selectionnes)
+        pdf.multi_cell(0, 6, f"Fonds filtrés : {filtre_txt}")
+    pdf.ln(3)
+
+    # Préparer les données du tableau
+    columns = [
+        "Nom",
+        "Prénom",
+        "Type du contrat",
+        "Fonds du filtre",
+        "Encours fonds sélectionnés",
+        "% du contrat",
+        "",
+        ""
+    ]
+
+    # Calcul des fonds par contrat (limités aux fonds sélectionnés)
+    def fonds_du_contrat(contrat_num: str) -> str:
+        df_fonds = df_allocations[(df_allocations['Numéro contrat'] == contrat_num) &
+                                  (df_allocations['Support'].isin(fonds_selectionnes))]
+        fonds_list = df_fonds['Support'].dropna().astype(str).tolist()
+        # Une ligne par fond dans la cellule
+        return "\n".join(sorted(fonds_list)) if fonds_list else ""
+
+    def encours_fonds_selectionnes(contrat_num: str) -> float:
+        df_fonds = df_allocations[(df_allocations['Numéro contrat'] == contrat_num) &
+                                  (df_allocations['Support'].isin(fonds_selectionnes))]
+        if 'Encours en €' in df_fonds.columns:
+            return float(pd.to_numeric(df_fonds['Encours en €'], errors='coerce').fillna(0).sum())
+        return 0.0
+
+    # Construction des lignes
+    rows = []
+    required_cols = {'Numéro contrat', 'Nom', 'Prénom', 'Prestation', 'Encours en €'}
+    if not set(required_cols).issubset(set(contrats_resume.columns)):
+        # Si les colonnes ne sont pas toutes présentes, renvoyer un PDF minimal avec message
+        pdf.set_text_color(200, 0, 0)
+        pdf.multi_cell(0, 6, "Colonnes manquantes pour générer l'export. Veuillez vérifier les données.")
+        pdf_data = pdf.output(dest='S')
+        return bytes(pdf_data) if isinstance(pdf_data, bytearray) else pdf_data
+
+    rows_data = []
+    for _, row in contrats_resume.iterrows():
+        nom = str(row.get('Nom', ''))
+        prenom = str(row.get('Prénom', ''))
+        type_contrat = str(row.get('Prestation', ''))
+        contrat_num = row.get('Numéro contrat')
+        fonds_cell = fonds_du_contrat(contrat_num)
+        encours_sel = encours_fonds_selectionnes(contrat_num)
+        encours_total_contrat = float(row.get('Encours en €', 0) or 0)
+        pct = (encours_sel / encours_total_contrat * 100.0) if encours_total_contrat > 0 else 0.0
+        rows_data.append({
+            'Nom': nom,
+            'Prénom': prenom,
+            'Type du contrat': type_contrat,
+            'Fonds du filtre': fonds_cell,
+            'Encours': encours_sel,
+            'Pct': pct
+        })
+
+    # Trier par % du contrat décroissant
+    rows_data.sort(key=lambda r: r['Pct'], reverse=True)
+
+    # Formater les lignes pour affichage
+    rows = []
+    for r in rows_data:
+        encours_str = f"{r['Encours']:,.0f}".replace(',', ' ')
+        pct_str = f"{r['Pct']:.1f}%".replace('.', ',')
+        rows.append([
+            r['Nom'], r['Prénom'], r['Type du contrat'], r['Fonds du filtre'], encours_str, pct_str, "", ""
+        ])
+
+    # Styles d'entêtes
+    try:
+        from fpdf.fonts import FontFace as _FontFace
+        headings_style = _FontFace(emphasis="BOLD", color=(255, 255, 255), fill_color=(80, 80, 80))
+    except Exception:
+        headings_style = FontFace(emphasis="BOLD", color=(255, 255, 255), fill_color=(80, 80, 80))
+
+    # Paramètres de tableau
+    table_width = pdf.epw
+    # Ratios de colonnes (ajuster pour laisser de l'espace au champ multi-lignes)
+    # Ajustement des largeurs pour intégrer 2 colonnes vides (OUI/NON)
+    # Total = 1.00
+    col_widths_ratio = (0.14, 0.14, 0.12, 0.28, 0.12, 0.08, 0.06, 0.06)
+
+    # Construire le tableau
+    pdf.set_font("helvetica", "", 9)
+    with pdf.table(
+        borders_layout="ALL",
+        headings_style=headings_style,
+        line_height=pdf.font_size * 1.9,
+        text_align=("LEFT", "LEFT", "LEFT", "LEFT", "RIGHT", "RIGHT", "CENTER", "CENTER"),
+        width=table_width,
+        col_widths=tuple(w * table_width for w in col_widths_ratio)
+    ) as table:
+        # Ligne d'entête
+        header_row = table.row()
+        for col in columns:
+            header_row.cell(col)
+
+        # Lignes de données
+        for data_row in rows:
+            row_obj = table.row()
+            for datum in data_row:
+                # Le moteur de table de fpdf2 supporte MultiCell et les \n
+                row_obj.cell(str(datum))
+
+    # Sortie
+    pdf_data = pdf.output(dest='S')
+    if isinstance(pdf_data, bytearray):
+        return bytes(pdf_data)
+    return pdf_data
