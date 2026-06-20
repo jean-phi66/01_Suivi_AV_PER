@@ -27,6 +27,12 @@ perfo_page = st.Page(
     icon = '📈'
 )
 
+tri_pdf_page = st.Page(
+    page = 'views/tri_pdf.py',
+    title = "TRI PDF",
+    icon = '📄'
+)
+
 batch_reports_page = st.Page(
     page = 'views/batch_reports.py',
     title = "Rapport pdf",
@@ -89,6 +95,12 @@ performance_fonds_page = st.Page(
     icon = '📈'
 )
 
+tri_portefeuille_page = st.Page(
+    page = 'views/tri_portefeuille.py',
+    title = "TRI portefeuille",
+    icon = '📉'
+)
+
 catalogue_fonds_page = st.Page(
     page = 'views/fonds_catalogue.py',
     title = "Catalogue des fonds",
@@ -120,6 +132,7 @@ if df_contrat_selected is not None and hasattr(df_contrat_selected, "empty") and
 nav_items = {
     "DONNEES": [data_ingestion_page],
     "CLIENT": [client_page, composition_page, perfo_page],
+    "ANALYSE PDF": [tri_pdf_page],
     "OPERATIONS": [page for page in [fiche_per_page if show_arbitrage_per else None,
                                       fiche_av_page if show_arbitrage_av else None]
                     if page is not None],
@@ -129,6 +142,7 @@ nav_items = {
         prod_struct_page,
         fonds_portefeuille_page,
         performance_fonds_page,
+        tri_portefeuille_page,
     ],
     "PARAMETRES": [catalogue_fonds_page, typage_fonds_page],
     "Reporting": [batch_reports_page],
