@@ -11,9 +11,19 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from report_generator import generate_rapport_pdf
+from reporting_helpers import build_evolution_figure, build_kpi_overrides, build_tri_figure, resolve_payment_source
+from tri_integration import load_tri_analyses, match_tri_analyses_to_contracts
 
 
-def generate_figures_for_contract(df_allocations_client, df_contrat_selected, contrat_num):
+def generate_figures_for_contract(
+    df_allocations_client,
+    df_contrat_selected,
+    contrat_num,
+    df_contrats_all,
+    df_contrat_agg,
+    tri_contracts_map,
+    preferred_source,
+):
     """Génère les figures nécessaires pour un contrat en utilisant EXACTEMENT les mêmes fonctions que les pages individuelles"""
     import plotly.express as px
     import plotly.graph_objects as go
@@ -27,6 +37,8 @@ def generate_figures_for_contract(df_allocations_client, df_contrat_selected, co
         sys.path.append(root_path)
     
     figures = {}
+    tri_analysis = tri_contracts_map.get(str(contrat_num))
+    source_context = resolve_payment_source(df_contrat_selected, tri_analysis, preferred_source)
     
     try:
         # Figure de typologie (composition.py) - MÊME CODE QUE DANS COMPOSITION.PY
@@ -60,9 +72,9 @@ def generate_figures_for_contract(df_allocations_client, df_contrat_selected, co
             from waterfall_graphs import generate_contrats_waterfall, generate_allocations_waterfall
             
             # Waterfall contrat - MÊME LOGIQUE QUE DANS PERFO.PY
-            if not df_contrat_selected.empty and 'df_contrats' in ss and 'df_allocations' in ss:
+            if not df_contrat_selected.empty and 'df_allocations' in ss:
                 # Préparer les données exactement comme dans perfo.py
-                df_contrats = ss['df_contrats']
+                df_contrats = df_contrats_all.copy()
                 df_allocations = ss['df_allocations']
                 
                 # Détecter si c'est un contrat PER pour appliquer la réduction fiscale automatiquement
@@ -87,6 +99,26 @@ def generate_figures_for_contract(df_allocations_client, df_contrat_selected, co
                     'Performance financière en euros (perf du contrat)'] - df_contrats_upd['+/- value (en €)']
                 df_contrats_upd.rename(
                     columns={'+/- value (en €)': 'Performance allocation'}, inplace=True)
+
+                if (
+                    source_context.get('source_effective') == "Releve d'operations TRI"
+                    and source_context.get('gross_used') is not None
+                    and source_context.get('net_used') is not None
+                ):
+                    mask_contrat = df_contrats_upd['N° de contrat'].astype(str) == str(contrat_num)
+                    if mask_contrat.any():
+                        gross_used = float(source_context['gross_used'])
+                        net_used = float(source_context['net_used'])
+                        df_contrats_upd.loc[mask_contrat, 'Montant total des versements bruts'] = gross_used
+                        df_contrats_upd.loc[mask_contrat, 'Montant total des versements nets'] = net_used
+                        df_contrats_upd.loc[mask_contrat, 'Frais'] = net_used - gross_used
+                        df_contrats_upd.loc[mask_contrat, 'Performance financière en euros (perf du contrat)'] = (
+                            df_contrats_upd.loc[mask_contrat, 'Valorisation'] - net_used
+                        )
+                        df_contrats_upd.loc[mask_contrat, 'Performance embarquée'] = (
+                            df_contrats_upd.loc[mask_contrat, 'Performance financière en euros (perf du contrat)']
+                            - df_contrats_upd.loc[mask_contrat, 'Performance allocation']
+                        )
                 
                 # Générer le waterfall avec les mêmes paramètres que dans perfo.py
                 # IMPORTANT: Utiliser add_reduction_IR et IR_num pour les PER
@@ -151,102 +183,44 @@ def generate_figures_for_contract(df_allocations_client, df_contrat_selected, co
         # Figure évolution - REPRENDRE EXACTEMENT LE CODE DE PERFO.PY
         try:
             # Vérifier que les données historiques sont disponibles
-            if 'df_contrat_agg' in ss and not df_contrat_selected.empty:
-                df_contrat_agg = ss['df_contrat_agg']
-                
-                # 1. EXACTEMENT le même code que dans perfo.py (lignes 147-165)
+            if not df_contrat_selected.empty:
                 df_historical_for_contract = df_contrat_agg[df_contrat_agg['N° de contrat'] == contrat_num].copy()
                 df_current_for_contract = df_contrat_selected.copy()
-                
-                # Colonnes nécessaires pour le graphique et la fusion
-                required_cols = ['N° de contrat', 'Date de valorisation', 'Valorisation', 'Titulaire(s)']
-                
-                # S'assurer que les deux DataFrames ont ces colonnes
-                missing_cols = [col for col in required_cols if col not in df_historical_for_contract.columns]
-                if not missing_cols and not df_historical_for_contract.empty:
-                    df_historical_for_plot = df_historical_for_contract[required_cols]
-                    df_current_for_plot = df_current_for_contract[required_cols]
-                    
-                    # 4. Combiner les données historiques et actuelles
-                    df_combined_plot_data = pd.concat([df_historical_for_plot, df_current_for_plot], ignore_index=True)
-                    
-                    # 5. Supprimer les doublons potentiels et trier par date
-                    df_combined_plot_data.drop_duplicates(subset=['N° de contrat', 'Date de valorisation'], inplace=True)
-                    df_combined_plot_data.sort_values(by='Date de valorisation', inplace=True)
-                    
-                    # 5b. Filtrer les baisses de valorisation > 30% (même logique que perfo.py)
-                    points_avant_filtrage = len(df_combined_plot_data)
-                    df_combined_plot_data_filtered = df_combined_plot_data.copy()
-                    est_filtre = False
-                    
-                    if points_avant_filtrage > 1:
-                        variation = df_combined_plot_data_filtered['Valorisation'].pct_change()
-                        condition_filtrage = (variation >= -0.30) | variation.isnull()
-                        df_combined_plot_data_filtered = df_combined_plot_data_filtered[condition_filtrage]
-                        
-                        points_apres_filtrage = len(df_combined_plot_data_filtered)
-                        if points_avant_filtrage > points_apres_filtrage:
-                            est_filtre = True
-                    
-                    # 6. Créer le graphique - EXACTEMENT le même code que perfo.py (lignes 190-237)
-                    titulaire_pour_titre = ""
-                    if not df_combined_plot_data_filtered.empty and 'Titulaire(s)' in df_combined_plot_data_filtered.columns:
-                        titulaire_pour_titre = df_combined_plot_data_filtered['Titulaire(s)'].iloc[0]
-                    elif not df_combined_plot_data.empty and 'Titulaire(s)' in df_combined_plot_data.columns:
-                        titulaire_pour_titre = df_combined_plot_data['Titulaire(s)'].iloc[0]
-                    
-                    if titulaire_pour_titre:
-                        fig_evol_title = f"Évolution de la valorisation pour {titulaire_pour_titre} - Contrat {contrat_num}"
-                    else:
-                        fig_evol_title = f"Évolution de la valorisation du contrat {contrat_num}"
-                    
-                    if est_filtre:
-                        fig_evol_title += " (filtrée)"
-                    
-                    fig_evol = px.line(df_combined_plot_data_filtered, x='Date de valorisation', y='Valorisation',
-                                     title=fig_evol_title, markers=True)
-                    fig_evol.update_xaxes(title_text='Date de valorisation')
-                    fig_evol.update_yaxes(title_text='Valorisation (€)', tickformat=",.0f")
-                    
-                    # Ajouter la ligne horizontale pour le montant total des versements bruts
-                    if 'Montant total des versements bruts' in df_current_for_contract.columns:
-                        montant_versements_bruts = df_current_for_contract['Montant total des versements bruts'].iloc[0]
-                        fig_evol.add_hline(y=montant_versements_bruts,
-                                         line_dash="dash",
-                                         line_color="red",
-                                         annotation_text=f"Versements Bruts: {montant_versements_bruts:,.0f} €",
-                                         annotation_position="bottom right",
-                                         annotation_font_size=10,
-                                         annotation_font_color="red")
-                        
-                        # Ligne pour l'effort d'épargne si c'est un PER avec avantage fiscal
-                        if ('Enveloppe' in df_contrat_selected.columns and 
-                            df_contrat_selected['Enveloppe'].iloc[0] == "PER"):
-                            # Pour simplifier, on utilise un TMI de 30% par défaut pour le batch
-                            IR_num = 0.30
-                            effort_epargne = montant_versements_bruts * (1 - IR_num)
-                            fig_evol.add_hline(y=effort_epargne,
-                                             line_dash="dash",
-                                             line_color="blue",
-                                             annotation_text=f"Effort d'épargne (après avantage fiscal): {effort_epargne:,.0f} €",
-                                             annotation_position="top right",
-                                             annotation_font_size=10,
-                                             annotation_font_color="blue")
-                    
-                    figures['fig_evol'] = fig_evol
-                else:
-                    figures['fig_evol'] = None
+                add_reduction_ir = (
+                    'Enveloppe' in df_contrat_selected.columns and df_contrat_selected['Enveloppe'].iloc[0] == "PER"
+                )
+                ir_num = 0.30 if add_reduction_ir else 0.0
+                figures['fig_evol'] = build_evolution_figure(
+                    df_historical_for_contract,
+                    df_current_for_contract,
+                    contrat_num,
+                    tri_analysis,
+                    source_context,
+                    add_reduction_ir=add_reduction_ir,
+                    ir_num=ir_num,
+                )
+                figures['fig_tri'] = build_tri_figure(
+                    df_historical_for_contract,
+                    df_current_for_contract,
+                    contrat_num,
+                    tri_analysis,
+                )
             else:
                 figures['fig_evol'] = None
+                figures['fig_tri'] = None
                 
         except Exception as e:
             print(f"Erreur lors de la génération du graphique d'évolution: {e}")
             figures['fig_evol'] = None
+            figures['fig_tri'] = None
+
+        figures['kpi_overrides'] = build_kpi_overrides(df_contrat_selected, source_context)
+        figures['source_context'] = source_context
         
         # S'assurer que tous les graphiques attendus sont définis
         required_figures = ['fig_typologie', 'fig_supports', 'fig_waterfall_contract', 
                           'fig_waterfall_allocation', 'fig_distribution_SRI', 
-                          'fig_SRI_contrat', 'fig_evol']
+                          'fig_SRI_contrat', 'fig_evol', 'fig_tri', 'kpi_overrides', 'source_context']
         
         for fig_name in required_figures:
             if fig_name not in figures:
@@ -257,17 +231,23 @@ def generate_figures_for_contract(df_allocations_client, df_contrat_selected, co
         # Retourner des figures vides en cas d'erreur
         figures = {key: None for key in ['fig_typologie', 'fig_supports', 'fig_waterfall_contract', 
                                        'fig_waterfall_allocation', 'fig_distribution_SRI', 
-                                       'fig_SRI_contrat', 'fig_evol']}
+                                       'fig_SRI_contrat', 'fig_evol', 'fig_tri', 'kpi_overrides', 'source_context']}
     
     return figures
 
 
-def generate_batch_reports(contrats_selectionnes, format_fichiers, inclure_timestamp):
+def generate_batch_reports(contrats_selectionnes, format_fichiers, inclure_timestamp, preferred_source):
     """Génère les rapports pour tous les contrats sélectionnés"""
     
     # Récupérer les DataFrames depuis la session
     df_contrats = ss['df_contrats']
     df_allocations = ss['df_allocations']
+    df_contrat_agg = ss.get('df_contrat_agg_filtered', ss.get('df_contrat_agg', pd.DataFrame()))
+
+    tri_contracts_df, tri_contracts_map = match_tri_analyses_to_contracts(
+        load_tri_analyses(),
+        df_contrats[["N° de contrat", "Titulaire(s)", "Enveloppe", "Partenaire"]].drop_duplicates().copy(),
+    )
     
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -302,7 +282,15 @@ def generate_batch_reports(contrats_selectionnes, format_fichiers, inclure_times
                 continue
             
             # Générer les figures nécessaires
-            figures = generate_figures_for_contract(df_allocations_client, df_contrat_selected, contrat_num)
+            figures = generate_figures_for_contract(
+                df_allocations_client,
+                df_contrat_selected,
+                contrat_num,
+                df_contrats,
+                df_contrat_agg,
+                tri_contracts_map,
+                preferred_source,
+            )
             
             # Générer le PDF
             pdf_data = generate_rapport_pdf(
@@ -316,7 +304,9 @@ def generate_batch_reports(contrats_selectionnes, format_fichiers, inclure_times
                 fig_distribution_SRI_plot=figures.get('fig_distribution_SRI'),
                 fig_SRI_contrat_plot=figures.get('fig_SRI_contrat'),
                 fig_evol_plot=figures.get('fig_evol'),
-                df_alloc_client_data=df_allocations_client
+                df_alloc_client_data=df_allocations_client,
+                fig_tri_plot=figures.get('fig_tri'),
+                kpi_overrides=figures.get('kpi_overrides'),
             )
             
             # Créer le nom de fichier
@@ -595,10 +585,17 @@ def main():
                 value=True,
                 help="Ajoute la date et l'heure aux noms des fichiers"
             )
+
+        preferred_source = st.radio(
+            "Source des versements pour les rapports",
+            options=["CSV contrats", "Releve d'operations TRI"],
+            horizontal=True,
+            help="Si le relevé TRI n'est pas disponible pour un contrat, le rapport repasse automatiquement sur les valeurs CSV.",
+        )
         
         # Bouton de génération
         if st.button("🚀 Générer les rapports", type="primary", key="generate_reports"):
-            generate_batch_reports(contrats_selectionnes, format_fichiers, inclure_timestamp)
+            generate_batch_reports(contrats_selectionnes, format_fichiers, inclure_timestamp, preferred_source)
     else:
         st.info("Sélectionnez au moins un contrat pour générer des rapports.")
 

@@ -115,8 +115,22 @@ class PDF(FPDF):
         return 0.0
 
 
-def calculate_kpis(pdf, df_contrat_sel):
+def calculate_kpis(pdf, df_contrat_sel, kpi_overrides=None):
     """Calcule les KPIs du contrat (TRA, performances, etc.)"""
+    if kpi_overrides:
+        return {
+            'tra_str': kpi_overrides.get('tra_str', 'N/A'),
+            'montant_versements_bruts_str': kpi_overrides.get('montant_versements_bruts_str', 'N/A'),
+            'montant_versements_nets_kpi_str': kpi_overrides.get('montant_versements_nets_kpi_str', 'N/A'),
+            'var_vs_brut_pct_str': kpi_overrides.get('var_vs_brut_pct_str', 'N/A'),
+            'var_vs_net_pct_str': kpi_overrides.get('var_vs_net_pct_str', 'N/A'),
+            'source_versements_label': kpi_overrides.get('source_versements_label', 'CSV contrats'),
+            'frais_entree_str': kpi_overrides.get('frais_entree_str', 'N/A'),
+            'taux_frais_str': kpi_overrides.get('taux_frais_str', 'N/A'),
+            'tri_net_str': kpi_overrides.get('tri_net_str', 'N/A'),
+            'tri_brut_str': kpi_overrides.get('tri_brut_str', 'N/A'),
+        }
+
     # Calcul du TRA (approximation simple)
     tra_str = "N/A"
     if pdf.date_ouverture != "N/A" and pdf.date_valorisation_report != "N/A" and pdf.valorisation > 0:
@@ -165,7 +179,12 @@ def calculate_kpis(pdf, df_contrat_sel):
         'montant_versements_bruts_str': montant_versements_bruts_str,
         'montant_versements_nets_kpi_str': montant_versements_nets_kpi_str,
         'var_vs_brut_pct_str': var_vs_brut_pct_str,
-        'var_vs_net_pct_str': var_vs_net_pct_str
+        'var_vs_net_pct_str': var_vs_net_pct_str,
+        'source_versements_label': 'CSV contrats',
+        'frais_entree_str': 'N/A',
+        'taux_frais_str': 'N/A',
+        'tri_net_str': 'N/A',
+        'tri_brut_str': 'N/A',
     }
 
 
@@ -202,6 +221,27 @@ def add_kpis_section(pdf, kpis):
     pdf.cell(w_label_versement, 6, "TRA (estimé) :", border=0, ln=0)
     pdf.set_font(current_font_family, "", kpi_font_size)
     pdf.cell(0, 6, kpis['tra_str'], border=0, ln=True, align="R")
+
+    pdf.set_font(current_font_family, "", 8)
+    pdf.cell(0, 5, f"Source des versements : {kpis['source_versements_label']}", border=0, ln=True)
+
+    pdf.set_font(current_font_family, "B", kpi_font_size)
+    pdf.cell(w_label_versement, 6, "Frais d'entrée :", border=0, ln=0)
+    pdf.set_font(current_font_family, "", kpi_font_size)
+    pdf.cell(w_valeur_versement, 6, kpis['frais_entree_str'], border=0, ln=0, align="R")
+    pdf.set_font(current_font_family, "B", kpi_font_size)
+    pdf.cell(w_label_performance, 6, " | Taux frais :", border=0, ln=0, align="L")
+    pdf.set_font(current_font_family, "", kpi_font_size)
+    pdf.cell(0, 6, kpis['taux_frais_str'], border=0, ln=True, align="R")
+
+    pdf.set_font(current_font_family, "B", kpi_font_size)
+    pdf.cell(w_label_versement, 6, "TRI net :", border=0, ln=0)
+    pdf.set_font(current_font_family, "", kpi_font_size)
+    pdf.cell(w_valeur_versement, 6, kpis['tri_net_str'], border=0, ln=0, align="R")
+    pdf.set_font(current_font_family, "B", kpi_font_size)
+    pdf.cell(w_label_performance, 6, " | TRI brut :", border=0, ln=0, align="L")
+    pdf.set_font(current_font_family, "", kpi_font_size)
+    pdf.cell(0, 6, kpis['tri_brut_str'], border=0, ln=True, align="R")
     
     pdf.ln(5)
 
@@ -288,7 +328,8 @@ def generate_rapport_pdf(client_name, contrat_num, df_contrat_sel,
                          fig_typologie_plot, fig_supports_plot,
                          fig_waterfall_contract_plot, fig_waterfall_allocation_plot,
                          fig_distribution_SRI_plot, fig_SRI_contrat_plot,
-                         fig_evol_plot, df_alloc_client_data):
+                         fig_evol_plot, df_alloc_client_data,
+                         fig_tri_plot=None, kpi_overrides=None):
     """
     Génère un rapport PDF complet pour un contrat donné
     
@@ -312,6 +353,7 @@ def generate_rapport_pdf(client_name, contrat_num, df_contrat_sel,
     image_data_fig_distribution_SRI = convert_figure_to_image(fig_distribution_SRI_plot, img_scale)
     image_data_fig_SRI_contrat = convert_figure_to_image(fig_SRI_contrat_plot, img_scale)
     image_data_fig_evol = convert_figure_to_image(fig_evol_plot, img_scale)
+    image_data_fig_tri = convert_figure_to_image(fig_tri_plot, img_scale)
 
     # Création du PDF
     pdf = PDF(client=client_name, contrat=contrat_num, df_contrat_selected=df_contrat_sel)
@@ -326,7 +368,7 @@ def generate_rapport_pdf(client_name, contrat_num, df_contrat_sel,
     pdf.cell(0, 8, valorisation_text, border=0, ln=True)
 
     # Calcul et affichage des KPIs
-    kpis = calculate_kpis(pdf, df_contrat_sel)
+    kpis = calculate_kpis(pdf, df_contrat_sel, kpi_overrides=kpi_overrides)
     add_kpis_section(pdf, kpis)
 
     # Graphiques en secteurs
@@ -352,6 +394,12 @@ def generate_rapport_pdf(client_name, contrat_num, df_contrat_sel,
         pdf.add_page()
         add_section_title(pdf, "Évolution de la Valorisation du Contrat")
         pdf.image(image_data_fig_evol, x=pdf.w / 2 - (pdf.epw * 0.9) / 2, w=pdf.epw * 0.9, keep_aspect_ratio=True)
+        pdf.ln(5)
+
+    if image_data_fig_tri:
+        pdf.add_page()
+        add_section_title(pdf, "Évolution du TRI du Contrat")
+        pdf.image(image_data_fig_tri, x=pdf.w / 2 - (pdf.epw * 0.9) / 2, w=pdf.epw * 0.9, keep_aspect_ratio=True)
         pdf.ln(5)
 
     # --- Page 4: Analyse du Risque (SRI) ---

@@ -4,10 +4,10 @@ from streamlit import session_state as ss
 import pandas as pd
 import numpy as np
 
-import plotly.express as px
 from waterfall_graphs import generate_contrats_waterfall, generate_allocations_waterfall
 import plotly.graph_objects as go
-from tri_integration import load_tri_analyses, match_tri_analyses_to_contracts, build_contract_tri_history
+from tri_integration import load_tri_analyses, match_tri_analyses_to_contracts
+from reporting_helpers import build_evolution_figure, build_kpi_overrides, build_tri_figure, build_tri_history, resolve_payment_source
 
 
 def format_pct(value):
@@ -19,43 +19,6 @@ def format_pct(value):
 @st.cache_resource(show_spinner=False)
 def get_tri_analyses_resource():
     return load_tri_analyses()
-
-
-def apply_readable_yaxis(
-    fig,
-    values,
-    min_abs_margin=100.0,
-    clamp_min_zero=True,
-    min_span=1.0,
-):
-    vals = pd.to_numeric(pd.Series(values), errors="coerce").dropna()
-    if vals.empty:
-        return False
-
-    vmin = float(vals.min())
-    vmax = float(vals.max())
-    full_span = max(vmax - vmin, float(min_span))
-
-    if len(vals) >= 10:
-        q_low = float(vals.quantile(0.05))
-        q_high = float(vals.quantile(0.95))
-        robust_span = max(q_high - q_low, float(min_span))
-        if full_span > robust_span * 2.5:
-            margin = robust_span * 0.15
-            y_low = q_low - margin
-            if clamp_min_zero:
-                y_low = max(0.0, y_low)
-            y_high = q_high + margin
-            fig.update_yaxes(range=[y_low, y_high])
-            return True
-
-    margin = max(full_span * 0.12, abs(vmax) * 0.02, float(min_abs_margin))
-    y_low = vmin - margin
-    if clamp_min_zero:
-        y_low = max(0.0, y_low)
-    y_high = vmax + margin
-    fig.update_yaxes(range=[y_low, y_high])
-    return False
 
 
 df_allocations = ss['df_allocations']
@@ -72,6 +35,15 @@ montant_versements_bruts = None
 montant_versements_nets = None
 gross_total = None
 net_total = None
+source_context = {
+    "source_effective": source_versements,
+    "gross_used": None,
+    "net_used": None,
+    "fees_total": None,
+    "fees_rate": None,
+    "tri_net": None,
+    "tri_brut": None,
+}
 
 tri_contracts_df, tri_contracts_map = match_tri_analyses_to_contracts(
     get_tri_analyses_resource(),
@@ -83,122 +55,68 @@ tri_analysis = tri_contracts_map.get(str(contrat))
 if not df_contrat_selected.empty:
     # Extract data
     valorisation = df_contrat_selected['Valorisation'].iloc[0]
-    date_ouverture_raw = df_contrat_selected['Ouverture'].iloc[0] if 'Ouverture' in df_contrat_selected.columns else None
-    date_valorisation_raw = df_contrat_selected['Date de valorisation'].iloc[0] if 'Date de valorisation' in df_contrat_selected.columns else None
     montant_versements_bruts_csv = df_contrat_selected['Montant total des versements bruts'].iloc[0] if 'Montant total des versements bruts' in df_contrat_selected.columns else 0.0
     montant_versements_nets_csv = df_contrat_selected['Montant total des versements nets'].iloc[0] if 'Montant total des versements nets' in df_contrat_selected.columns else 0.0
 
-    # Par defaut, les calculs utilisent les versements issus des CSV contrats.
-    montant_versements_bruts = float(montant_versements_bruts_csv)
-    montant_versements_nets = float(montant_versements_nets_csv)
-
-    # Frais d'entree estimes depuis le rapport d'operations TRI (si disponible)
-    frais_entree_estimes = None
-    taux_frais_entree_estime = None
-    tri_net_kpi = None
-    tri_brut_kpi = None
     if tri_analysis is not None:
-        tri_net_kpi = tri_analysis.get("tri_net")
-        tri_brut_kpi = tri_analysis.get("tri_gross")
         gross_total = tri_analysis.get("gross_payments_total")
         net_total = tri_analysis.get("net_payments_total")
         if gross_total is not None and net_total is not None and not pd.isna(gross_total) and not pd.isna(net_total):
             gross_total = float(gross_total)
             net_total = float(net_total)
-            if gross_total > 0 and net_total >= 0:
-                frais_entree_estimes = gross_total - net_total
-                taux_frais_entree_estime = frais_entree_estimes / gross_total
 
-                # Controle d'ecart CSV vs releves d'operations et choix utilisateur de la source a considerer.
-                tolerance_euro = 1.0
-                ecart_brut = gross_total - float(montant_versements_bruts_csv)
-                ecart_net = net_total - float(montant_versements_nets_csv)
-                ecart_detecte = abs(ecart_brut) > tolerance_euro or abs(ecart_net) > tolerance_euro
+    if tri_analysis is not None and gross_total is not None and net_total is not None and gross_total > 0 and net_total >= 0:
+        tolerance_euro = 1.0
+        ecart_brut = gross_total - float(montant_versements_bruts_csv)
+        ecart_net = net_total - float(montant_versements_nets_csv)
+        ecart_detecte = abs(ecart_brut) > tolerance_euro or abs(ecart_net) > tolerance_euro
 
-                if ecart_detecte:
-                    st.warning(
-                        (
-                            "Ecart detecte entre versements CSV et releves d'operations. "
-                            f"Bruts: {ecart_brut:,.0f} EUR | Nets: {ecart_net:,.0f} EUR"
-                        ).replace(",", " ")
-                    )
-                else:
-                    st.caption("Versements CSV et releves d'operations coherents (ecart <= 1 EUR).")
-
-                source_versements = st.radio(
-                    "Source des versements a considerer pour la page",
-                    options=["CSV contrats", "Releve d'operations TRI"],
-                    horizontal=True,
-                    key=f"source_versements_{contrat}",
-                )
-                if source_versements == "Releve d'operations TRI":
-                    montant_versements_bruts = gross_total
-                    montant_versements_nets = net_total
-
-    # Calculate TRA
-    tra_str = "N/A"
-    if pd.notna(date_ouverture_raw) and pd.notna(date_valorisation_raw) and valorisation > 0:
-        date_ouverture_dt = pd.to_datetime(date_ouverture_raw)
-        date_valorisation_dt = pd.to_datetime(date_valorisation_raw)
-        
-        if date_valorisation_dt > date_ouverture_dt:
-            years = (date_valorisation_dt - date_ouverture_dt).days / 365.25
-            if montant_versements_nets > 0:
-                # Simplified TRA calculation
-                tra = ((valorisation / montant_versements_nets) ** (1 / years) - 1) * 100
-                tra_str = f"{tra:.2f}%"
-            else:
-                tra_str = "N/A (V.N. nuls)"
+        if ecart_detecte:
+            st.warning(
+                (
+                    "Ecart detecte entre versements CSV et releves d'operations. "
+                    f"Bruts: {ecart_brut:,.0f} EUR | Nets: {ecart_net:,.0f} EUR"
+                ).replace(",", " ")
+            )
         else:
-             tra_str = "N/A (Durée <= 0)"
-    
-    # Calculate Performance vs Payments
-    var_vs_brut_pct_str = "N/A"
-    if montant_versements_bruts > 0:
-        var_vs_brut_pct = ((valorisation - montant_versements_bruts) / montant_versements_bruts) * 100
-        var_vs_brut_pct_str = f"{var_vs_brut_pct:.2f}%"
+            st.caption("Versements CSV et releves d'operations coherents (ecart <= 1 EUR).")
 
-    var_vs_net_pct_str = "N/A"
-    if montant_versements_nets > 0:
-        var_vs_net_pct = ((valorisation - montant_versements_nets) / montant_versements_nets) * 100
-        var_vs_net_pct_str = f"{var_vs_net_pct:.2f}%"
+        source_versements = st.radio(
+            "Source des versements a considerer pour la page",
+            options=["CSV contrats", "Releve d'operations TRI"],
+            horizontal=True,
+            key=f"source_versements_{contrat}",
+        )
+
+    source_context = resolve_payment_source(df_contrat_selected, tri_analysis, source_versements)
+    montant_versements_bruts = source_context.get("gross_used")
+    montant_versements_nets = source_context.get("net_used")
+    kpi_data = build_kpi_overrides(df_contrat_selected, source_context)
 
     # Display KPIs
     st.subheader("Indicateurs Clés de Performance")
     
     col1, col2 = st.columns(2)
     col1.metric("Valorisation", f"{valorisation:,.0f} €".replace(",", " "))
-    col2.metric("TRA (estimé)", tra_str)
+    col2.metric("TRA (estimé)", kpi_data["tra_str"].replace(",", "."))
 
     col3, col4 = st.columns(2)
-    col3.metric("Versements Bruts", f"{montant_versements_bruts:,.0f} €".replace(",", " "))
-    col4.metric("Performance / VB (%)", var_vs_brut_pct_str)
+    col3.metric("Versements Bruts", kpi_data["montant_versements_bruts_str"])
+    col4.metric("Performance / VB (%)", kpi_data["var_vs_brut_pct_str"].replace(",", "."))
 
     col5, col6 = st.columns(2)
-    col5.metric("Versements Nets", f"{montant_versements_nets:,.0f} €".replace(",", " "))
-    col6.metric("Performance / VN (%)", var_vs_net_pct_str)
+    col5.metric("Versements Nets", kpi_data["montant_versements_nets_kpi_str"])
+    col6.metric("Performance / VN (%)", kpi_data["var_vs_net_pct_str"].replace(",", "."))
 
-    st.caption(f"Source des versements retenue pour ces KPI: {source_versements}")
+    st.caption(f"Source des versements retenue pour ces KPI: {source_context['source_effective']}")
 
     col7, col8 = st.columns(2)
-    col7.metric(
-        "Frais d'entree estimes",
-        (f"{frais_entree_estimes:,.0f} €".replace(",", " ")) if frais_entree_estimes is not None else "N/A",
-    )
-    col8.metric(
-        "Taux frais d'entree estime",
-        (f"{taux_frais_entree_estime * 100:.2f}%") if taux_frais_entree_estime is not None else "N/A",
-    )
+    col7.metric("Frais d'entree estimes", kpi_data["frais_entree_str"])
+    col8.metric("Taux frais d'entree estime", kpi_data["taux_frais_str"].replace(",", "."))
 
     col9, col10 = st.columns(2)
-    col9.metric(
-        "TRI net",
-        (f"{float(tri_net_kpi) * 100:.2f}%") if tri_net_kpi is not None and not pd.isna(tri_net_kpi) else "N/A",
-    )
-    col10.metric(
-        "TRI brut",
-        (f"{float(tri_brut_kpi) * 100:.2f}%") if tri_brut_kpi is not None and not pd.isna(tri_brut_kpi) else "N/A",
-    )
+    col9.metric("TRI net", kpi_data["tri_net_str"].replace(",", "."))
+    col10.metric("TRI brut", kpi_data["tri_brut_str"].replace(",", "."))
     
     st.divider()
 # --- END: KPI Calculations ---
@@ -295,173 +213,21 @@ st.plotly_chart(fig_waterfall_allocation, use_container_width=True)
 ss['fig_waterfall_contract'] = fig_waterfall_contract
 ss['fig_waterfall_allocation'] = fig_waterfall_allocation
 
-# Historical evolution
-# df_contrat_selected est le point de données actuel pour le contrat sélectionné (depuis ss)
-# df_contrat_agg contient toutes les données historiques pour tous les contrats (depuis ss)
-
-# 1. Filtrer les données historiques pour le contrat sélectionné
 df_historical_for_contract = df_contrat_agg[df_contrat_agg['N° de contrat'] == contrat].copy()
-
-# 2. Les données actuelles pour le contrat sont dans df_contrat_selected (qui vient de ss['df_contrat_selected'])
 df_current_for_contract = df_contrat_selected.copy()
-
-# 3. Colonnes nécessaires pour le graphique et la fusion
-required_cols = ['N° de contrat', 'Date de valorisation', 'Valorisation', 'Titulaire(s)']
-
-# S'assurer que les deux DataFrames ont ces colonnes
-df_historical_for_plot = df_historical_for_contract[required_cols]
-df_current_for_plot = df_current_for_contract[required_cols]
-
-# 4. Combiner les données historiques et actuelles
-df_combined_plot_data = pd.concat([df_historical_for_plot, df_current_for_plot], ignore_index=True)
-
-# 5. Supprimer les doublons potentiels et trier par date
-df_combined_plot_data.drop_duplicates(subset=['N° de contrat', 'Date de valorisation'], inplace=True)
-df_combined_plot_data.sort_values(by='Date de valorisation', inplace=True)
-
-# Sauvegarder le nombre de points avant filtrage
-points_avant_filtrage = len(df_combined_plot_data)
-df_combined_plot_data_filtered = df_combined_plot_data.copy() # Initialiser avec une copie
-
-# 5b. Filtrer les baisses de valorisation > 30%
-est_filtre = False
-if points_avant_filtrage > 1: # Le filtrage n'a de sens que s'il y a au moins 2 points
-    # .pct_change() calcule (actuel - précédent) / précédent
-    # Une baisse de 30% est -0.3. On veut garder ce qui est >= -0.3
-    variation = df_combined_plot_data_filtered['Valorisation'].pct_change()
-    # Le premier point aura NaN pour la variation, on le garde.
-    # Les autres points sont gardés si leur variation est >= -0.30
-    condition_filtrage = (variation >= -0.30) | variation.isnull()
-    df_combined_plot_data_filtered = df_combined_plot_data_filtered[condition_filtrage]
-
-points_apres_filtrage = len(df_combined_plot_data_filtered)
-
-if points_avant_filtrage > points_apres_filtrage:
-    est_filtre = True
-    points_filtres_count = points_avant_filtrage - points_apres_filtrage
-    st.info(f"{points_filtres_count} point(s) de données ont été filtrés en raison d'une baisse de valorisation supérieure à 30% par rapport au point précédent.")
-
-
-# 6. Créer le graphique
-# Déterminer le titulaire à partir du dataframe filtré si possible, sinon du non-filtré
-titulaire_pour_titre = ""
-if not df_combined_plot_data_filtered.empty and 'Titulaire(s)' in df_combined_plot_data_filtered.columns:
-    titulaire_pour_titre = df_combined_plot_data_filtered['Titulaire(s)'].iloc[0]
-elif not df_combined_plot_data.empty and 'Titulaire(s)' in df_combined_plot_data.columns: # Fallback au df non filtré
-    titulaire_pour_titre = df_combined_plot_data['Titulaire(s)'].iloc[0]
-
-if titulaire_pour_titre:
-    fig_evol_title = f"Évolution de la valorisation pour {titulaire_pour_titre} - Contrat {contrat}"
-else:
-    fig_evol_title = f"Évolution de la valorisation du contrat {contrat}"
-
-if est_filtre:
-    fig_evol_title += " (filtrée)"
-
-fig_evol = px.line(df_combined_plot_data_filtered, x='Date de valorisation', y='Valorisation',
-                   title=fig_evol_title, markers=True) # Passage à un graphique en ligne avec marqueurs
-fig_evol.update_traces(name='Valorisation', showlegend=True)
-fig_evol.update_xaxes(title_text='Date de valorisation')
-fig_evol.update_yaxes(title_text='Valorisation (€)', tickformat=",.0f")
-y_values_for_scale = pd.to_numeric(df_combined_plot_data_filtered['Valorisation'], errors='coerce').dropna().tolist()
-
-# Ajouter la courbe des versements bruts selon la source retenue.
-used_operation_gross_curve = False
-if source_versements == "Releve d'operations TRI" and tri_analysis is not None:
-    movements = tri_analysis.get("movements")
-    if movements is not None and not movements.empty and "amount_gross" in movements.columns:
-        gross_movements = movements[movements["movement_type"] == "contribution"].copy()
-        if not gross_movements.empty:
-            gross_movements["date"] = pd.to_datetime(gross_movements["date"], errors="coerce").dt.normalize()
-            gross_movements = gross_movements.dropna(subset=["date"])
-            gross_by_date = (
-                gross_movements.groupby("date", as_index=False)["amount_gross"]
-                .sum()
-                .sort_values("date")
-            )
-            if not gross_by_date.empty:
-                gross_by_date["Versements bruts cumulés"] = gross_by_date["amount_gross"].cumsum()
-
-                valuation_dates = df_combined_plot_data_filtered[["Date de valorisation"]].copy()
-                valuation_dates["Date de valorisation"] = pd.to_datetime(
-                    valuation_dates["Date de valorisation"], errors="coerce"
-                ).dt.normalize()
-                valuation_dates = valuation_dates.dropna(subset=["Date de valorisation"]).sort_values("Date de valorisation")
-
-                if not valuation_dates.empty:
-                    gross_curve = pd.merge_asof(
-                        valuation_dates,
-                        gross_by_date[["date", "Versements bruts cumulés"]],
-                        left_on="Date de valorisation",
-                        right_on="date",
-                        direction="backward",
-                    )
-                    gross_curve["Versements bruts cumulés"] = gross_curve["Versements bruts cumulés"].fillna(0.0)
-
-                    fig_evol.add_trace(
-                        go.Scatter(
-                            x=gross_curve["Date de valorisation"],
-                            y=gross_curve["Versements bruts cumulés"],
-                            mode="lines+markers",
-                            name="Versements bruts (operations)",
-                            line=dict(color="red", width=2, dash="dash"),
-                            hovertemplate="<b>%{x|%d/%m/%Y}</b><br>Versements bruts cumulés: %{y:,.0f} €<extra></extra>",
-                        )
-                    )
-                    y_values_for_scale.extend(
-                        pd.to_numeric(gross_curve["Versements bruts cumulés"], errors="coerce").dropna().tolist()
-                    )
-                    used_operation_gross_curve = True
-
-                    if df_contrat_selected.Enveloppe.values[0] == "PER" and add_reduction_IR:
-                        gross_curve["Effort d'épargne"] = gross_curve["Versements bruts cumulés"] * (1 - IR_num)
-                        fig_evol.add_trace(
-                            go.Scatter(
-                                x=gross_curve["Date de valorisation"],
-                                y=gross_curve["Effort d'épargne"],
-                                mode="lines+markers",
-                                name="Effort d'épargne (après avantage fiscal)",
-                                line=dict(color="green", width=2, dash="dot"),
-                                hovertemplate="<b>%{x|%d/%m/%Y}</b><br>Effort d'épargne: %{y:,.0f} €<extra></extra>",
-                            )
-                        )
-                        y_values_for_scale.extend(
-                            pd.to_numeric(gross_curve["Effort d'épargne"], errors="coerce").dropna().tolist()
-                        )
-
-# Fallback: ligne statique sur la source retenue (CSV ou releve indisponible).
-if (not used_operation_gross_curve) and 'Montant total des versements bruts' in df_current_for_contract.columns:
-    montant_versements_bruts_fallback = (
-        float(montant_versements_bruts)
-        if montant_versements_bruts is not None
-        else float(df_current_for_contract['Montant total des versements bruts'].iloc[0])
-    )
-    fig_evol.add_hline(y=montant_versements_bruts_fallback,
-                        line_dash="dash",
-                        line_color="red",
-                        annotation_text=f"Versements Bruts ({source_versements}): {montant_versements_bruts_fallback:,.0f} €",
-                        annotation_position="bottom right",
-                        annotation_font_size=10,
-                        annotation_font_color="red")
-    y_values_for_scale.append(float(montant_versements_bruts_fallback))
-
-    if df_contrat_selected.Enveloppe.values[0] == "PER" and add_reduction_IR:
-        effort_epargne = montant_versements_bruts_fallback * (1 - IR_num)
-        fig_evol.add_hline(y=effort_epargne,
-                            line_dash="dash",
-                            line_color="green",
-                            annotation_text=f"Effort d'épargne (après avantage fiscal): {effort_epargne:,.0f} €",
-                            annotation_position="top right",
-                            annotation_font_size=10,
-                            annotation_font_color="green")
-        y_values_for_scale.append(float(effort_epargne))
-
-robust_zoom_used = apply_readable_yaxis(fig_evol, y_values_for_scale)
-if robust_zoom_used:
-    st.caption("Echelle Y ajustee automatiquement pour ameliorer la lisibilite (reduction de l'impact des valeurs extremes).")
+fig_evol = build_evolution_figure(
+    df_historical_for_contract,
+    df_current_for_contract,
+    contrat,
+    tri_analysis,
+    source_context,
+    add_reduction_ir=add_reduction_IR,
+    ir_num=IR_num,
+)
 
 ss['fig_evol'] = fig_evol
-st.plotly_chart(fig_evol, use_container_width=True)
+if fig_evol is not None:
+    st.plotly_chart(fig_evol, use_container_width=True)
 
 if tri_analysis is not None:
     movements_for_audit = tri_analysis.get("movements")
@@ -479,7 +245,7 @@ if tri_analysis is not None:
                 contrib_audit_display["Date"] = pd.to_datetime(contrib_audit_display["Date"]).dt.strftime("%d/%m/%Y")
 
                 with st.expander("Controle versements extraits du releve d'operations"):
-                    st.caption(f"Source retenue pour la page: {source_versements}")
+                    st.caption(f"Source retenue pour la page: {source_context['source_effective']}")
                     st.dataframe(contrib_audit_display, hide_index=True, use_container_width=True)
                     st.caption(
                         (
@@ -557,113 +323,27 @@ else:
             show_arbitrages = st.checkbox("Afficher arbitrages", value=True, key=f"tri_events_arb_{contrat}")
         with show_col3:
             show_frais = st.checkbox("Afficher frais", value=True, key=f"tri_events_fees_{contrat}")
-
-        movements = tri_analysis.get("movements")
-        if movements is not None and not movements.empty:
-            tri_anchor = tri_history[["Date de valorisation", "TRI net"]].copy()
-            tri_anchor = tri_anchor.sort_values("Date de valorisation")
-            tri_anchor["anchor_y"] = tri_anchor["TRI net"] * 100
-
-            events = movements.copy()
-            events["date"] = pd.to_datetime(events["date"], errors="coerce").dt.normalize()
-            events = events.dropna(subset=["date"])
-            events = events.sort_values("date")
-
-            if not events.empty and not tri_anchor.empty:
-                events = pd.merge_asof(
-                    events,
-                    tri_anchor[["Date de valorisation", "anchor_y"]],
-                    left_on="date",
-                    right_on="Date de valorisation",
-                    direction="backward",
-                )
-                # Si l'evenement est avant le premier point TRI, on l'aligne sur le premier point.
-                if events["anchor_y"].isna().any():
-                    events["anchor_y"] = events["anchor_y"].fillna(tri_anchor["anchor_y"].iloc[0])
-
-                if show_versements:
-                    versements = events[events["movement_type"] == "contribution"]
-                    if not versements.empty:
-                        tri_y_values_for_scale.extend(
-                            pd.to_numeric(versements["anchor_y"], errors="coerce").dropna().tolist()
-                        )
-                        fig_tri.add_trace(
-                            go.Scatter(
-                                x=versements["date"],
-                                y=versements["anchor_y"],
-                                mode="markers",
-                                name="Versements",
-                                marker=dict(color="#2ca02c", size=10, symbol="diamond"),
-                                customdata=versements[["label", "amount_net"]],
-                                hovertemplate="<b>%{x|%d/%m/%Y}</b><br>%{customdata[0]}<br>Montant net: %{customdata[1]:,.2f} €<extra></extra>",
-                            )
-                        )
-
-                if show_arbitrages:
-                    arbitrages = events[events["movement_type"] == "arbitrage"]
-                    if not arbitrages.empty:
-                        tri_y_values_for_scale.extend(
-                            pd.to_numeric(arbitrages["anchor_y"], errors="coerce").dropna().tolist()
-                        )
-                        fig_tri.add_trace(
-                            go.Scatter(
-                                x=arbitrages["date"],
-                                y=arbitrages["anchor_y"],
-                                mode="markers",
-                                name="Arbitrages",
-                                marker=dict(color="#d62728", size=10, symbol="x"),
-                                customdata=arbitrages[["label", "amount_net"]],
-                                hovertemplate="<b>%{x|%d/%m/%Y}</b><br>%{customdata[0]}<br>Montant net: %{customdata[1]:,.2f} €<extra></extra>",
-                            )
-                        )
-
-                if show_frais:
-                    frais = events[events["movement_type"] == "ignored_fee"]
-                    if not frais.empty:
-                        tri_y_values_for_scale.extend(
-                            pd.to_numeric(frais["anchor_y"], errors="coerce").dropna().tolist()
-                        )
-                        fig_tri.add_trace(
-                            go.Scatter(
-                                x=frais["date"],
-                                y=frais["anchor_y"],
-                                mode="markers",
-                                name="Frais",
-                                marker=dict(color="#9467bd", size=9, symbol="triangle-down"),
-                                customdata=frais[["label", "amount_net"]],
-                                hovertemplate="<b>%{x|%d/%m/%Y}</b><br>%{customdata[0]}<br>Montant net: %{customdata[1]:,.2f} €<extra></extra>",
-                            )
-                        )
-
-        fig_tri.add_hline(y=0, line_dash="dash", line_color="gray")
-        fig_tri.update_layout(
-            title=f"Evolution du TRI recalcule - contrat {contrat}",
-            xaxis_title="Date de valorisation",
-            yaxis_title="TRI (%)",
-            hovermode="x unified",
-            height=420,
+        fig_tri = build_tri_figure(
+            df_historical_for_contract,
+            df_current_for_contract,
+            contrat,
+            tri_analysis,
+            tri_history=tri_history,
+            include_versements=show_versements,
+            include_arbitrages=show_arbitrages,
+            include_frais=show_frais,
         )
-        robust_tri_zoom_used = apply_readable_yaxis(
-            fig_tri,
-            tri_y_values_for_scale,
-            min_abs_margin=0.25,
-            clamp_min_zero=False,
-            min_span=0.5,
-        )
-        if robust_tri_zoom_used:
-            st.caption("Echelle Y TRI ajustee automatiquement pour ameliorer la lisibilite.")
-        st.plotly_chart(fig_tri, use_container_width=True)
+        ss['fig_tri'] = fig_tri
+        if fig_tri is not None:
+            st.plotly_chart(fig_tri, use_container_width=True)
 
         if montant_versements_bruts is not None and montant_versements_nets is not None and montant_versements_bruts > 0:
-            frais_entree_total = float(montant_versements_bruts) - float(montant_versements_nets)
-            taux_frais_entree = frais_entree_total / float(montant_versements_bruts)
-
-            st.caption(f"KPI versements (source retenue: {source_versements})")
+            st.caption(f"KPI versements (source retenue: {source_context['source_effective']})")
             f1, f2, f3, f4 = st.columns(4)
-            f1.metric("Versements bruts (cumul)", f"{float(montant_versements_bruts):,.0f} €".replace(",", " "))
-            f2.metric("Versements nets (cumul)", f"{float(montant_versements_nets):,.0f} €".replace(",", " "))
-            f3.metric("Frais d'entree estimes", f"{frais_entree_total:,.0f} €".replace(",", " "))
-            f4.metric("Taux frais estime", f"{taux_frais_entree * 100:.2f}%")
+            f1.metric("Versements bruts (cumul)", kpi_data["montant_versements_bruts_str"])
+            f2.metric("Versements nets (cumul)", kpi_data["montant_versements_nets_kpi_str"])
+            f3.metric("Frais d'entree estimes", kpi_data["frais_entree_str"])
+            f4.metric("Taux frais estime", kpi_data["taux_frais_str"].replace(",", "."))
 
         with st.expander("Voir l'historique TRI"):
             tri_display = tri_history.copy()
