@@ -88,75 +88,71 @@ c5, c6 = st.columns(2)
 c5.metric("Valorisation appariee", format_eur(matched_current["Valorisation TRI"].sum()))
 c6.metric("Versements nets appariees", format_eur(matched_current["Versements nets"].sum()))
 
-if not portfolio_tri_summary.empty:
-    fig_summary = go.Figure()
-    fig_summary.add_trace(
-        go.Scatter(
-            x=portfolio_tri_summary["Date de valorisation"],
-            y=portfolio_tri_summary["TRI net median"] * 100,
-            mode="lines+markers",
-            name="TRI net median",
-            line=dict(color="#1f77b4", width=3),
-            hovertemplate="<b>%{x|%d/%m/%Y}</b><br>TRI net median: %{y:.2f}%<extra></extra>",
-        )
-    )
-    fig_summary.add_trace(
-        go.Scatter(
-            x=portfolio_tri_summary["Date de valorisation"],
-            y=portfolio_tri_summary["TRI net pondéré"] * 100,
-            mode="lines+markers",
-            name="TRI net pondere",
-            line=dict(color="#ff7f0e", width=3, dash="dot"),
-            hovertemplate="<b>%{x|%d/%m/%Y}</b><br>TRI net pondere: %{y:.2f}%<extra></extra>",
-        )
-    )
-    fig_summary.add_hline(y=0, line_dash="dash", line_color="gray")
-    fig_summary.update_layout(
-        title="Evolution agregée des TRI du portefeuille",
-        xaxis_title="Date de valorisation",
-        yaxis_title="TRI (%)",
-        hovermode="x unified",
-        height=440,
-    )
-    st.plotly_chart(fig_summary, use_container_width=True)
-
-    fig_coverage = go.Figure()
-    fig_coverage.add_trace(
-        go.Bar(
-            x=portfolio_tri_summary["Date de valorisation"],
-            y=portfolio_tri_summary["Contrats apparies"],
-            name="Contrats apparies",
-            marker_color="#2ca02c",
-            hovertemplate="<b>%{x|%d/%m/%Y}</b><br>Contrats apparies: %{y}<extra></extra>",
-        )
-    )
-    fig_coverage.update_layout(
-        title="Couverture historique des contrats apparies",
-        xaxis_title="Date de valorisation",
-        yaxis_title="Nombre de contrats",
-        height=320,
-    )
-    st.plotly_chart(fig_coverage, use_container_width=True)
-
-st.subheader("TRI actuels par contrat")
+#st.subheader("TRI actuels par contrat")
 
 display_current = matched_current.copy()
 display_current = display_current.sort_values("TRI net", ascending=False)
 
-scatter_df = display_current.dropna(subset=["TRI net", "Valorisation TRI"])
-if not scatter_df.empty:
-    fig_scatter = px.scatter(
-        scatter_df,
-        x="Valorisation TRI",
-        y="TRI net",
-        color="Enveloppe",
-        hover_data=["N° de contrat", "Titulaire(s)", "Partenaire"],
-        title="TRI net actuel par contrat",
+st.subheader("TRI brut et net selon l'anciennete du contrat")
+
+age_source = matched_current.copy()
+if "Ouverture" in df_contrats.columns:
+    age_source = age_source.merge(
+        df_contrats[["N° de contrat", "Ouverture"]].drop_duplicates(),
+        on="N° de contrat",
+        how="left",
     )
-    fig_scatter.update_traces(marker=dict(size=10, opacity=0.8))
-    fig_scatter.update_xaxes(title_text="Valorisation (€)", tickformat=",.0f")
-    fig_scatter.update_yaxes(title_text="TRI net", tickformat=".1%")
-    st.plotly_chart(fig_scatter, use_container_width=True)
+else:
+    age_source["Ouverture"] = pd.NaT
+
+age_source["Ouverture"] = pd.to_datetime(
+    age_source["Ouverture"],
+    format="mixed",
+    dayfirst=True,
+    errors="coerce",
+)
+if "Date de valorisation TRI" in age_source.columns:
+    age_source["Date reference TRI"] = pd.to_datetime(age_source["Date de valorisation TRI"], errors="coerce")
+else:
+    age_source["Date reference TRI"] = pd.Timestamp.today().normalize()
+age_source["Date reference TRI"] = age_source["Date reference TRI"].fillna(pd.Timestamp.today().normalize())
+
+age_source["Anciennete (annees)"] = (
+    (age_source["Date reference TRI"] - age_source["Ouverture"]).dt.days / 365.25
+)
+
+age_scatter_df = age_source.dropna(subset=["Anciennete (annees)", "TRI net", "TRI brut"]).copy()
+if not age_scatter_df.empty:
+    age_scatter_df["Date d'ouverture"] = age_scatter_df["Ouverture"].dt.strftime("%d/%m/%Y")
+    age_scatter_long = pd.concat(
+        [
+            age_scatter_df[[
+                "N° de contrat", "Titulaire(s)", "Enveloppe", "Partenaire", "Date d'ouverture", "Anciennete (annees)", "TRI net"
+            ]].rename(columns={"TRI net": "TRI"}).assign(Type="TRI net"),
+            age_scatter_df[[
+                "N° de contrat", "Titulaire(s)", "Enveloppe", "Partenaire", "Date d'ouverture", "Anciennete (annees)", "TRI brut"
+            ]].rename(columns={"TRI brut": "TRI"}).assign(Type="TRI brut"),
+        ],
+        ignore_index=True,
+    )
+
+    fig_age_scatter = px.scatter(
+        age_scatter_long,
+        x="Anciennete (annees)",
+        y="TRI",
+        color="Type",
+        symbol="Enveloppe",
+        hover_data=["N° de contrat", "Titulaire(s)", "Partenaire", "Date d'ouverture"],
+        title="TRI brut et TRI net en fonction de l'anciennete",
+        color_discrete_map={"TRI net": "#1f77b4", "TRI brut": "#ff7f0e"},
+    )
+    fig_age_scatter.update_traces(marker=dict(size=9, opacity=0.8))
+    fig_age_scatter.update_xaxes(title_text="Anciennete du contrat (annees)", tickformat=".1f")
+    fig_age_scatter.update_yaxes(title_text="TRI", tickformat=".1%")
+    fig_age_scatter.add_hline(y=0, line_dash="dash", line_color="gray")
+    st.plotly_chart(fig_age_scatter, use_container_width=True)
+else:
+    st.info("Impossible d'afficher le scatter anciennete/TRI: donnees d'ouverture ou TRI manquantes.")
 
 display_current["Date de valorisation TRI"] = pd.to_datetime(display_current["Date de valorisation TRI"]).dt.strftime("%d/%m/%Y")
 display_current["Valorisation TRI"] = display_current["Valorisation TRI"].map(format_eur)

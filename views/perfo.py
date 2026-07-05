@@ -6,7 +6,8 @@ import numpy as np
 
 from waterfall_graphs import generate_contrats_waterfall, generate_allocations_waterfall
 import plotly.graph_objects as go
-from tri_integration import load_tri_analyses, match_tri_analyses_to_contracts
+import plotly.express as px
+from tri_integration import load_tri_analyses, match_tri_analyses_to_contracts, build_contract_tri_history
 from reporting_helpers import build_evolution_figure, build_kpi_overrides, build_tri_figure, build_tri_history, resolve_payment_source
 
 
@@ -121,7 +122,10 @@ if not df_contrat_selected.empty:
     st.divider()
 # --- END: KPI Calculations ---
 
-if (df_contrat_selected.Enveloppe.values[0] == "PER"):
+enveloppe_label = str(df_contrat_selected['Enveloppe'].iloc[0]).upper() if (not df_contrat_selected.empty and 'Enveloppe' in df_contrat_selected.columns) else ""
+is_per_contract = "PER" in enveloppe_label
+
+if is_per_contract:
     add_reduction_IR = st.checkbox("Ajouter avantage fiscal")
     if add_reduction_IR:
         IR = st.selectbox(
@@ -180,7 +184,7 @@ fig_waterfall_contract = go.Figure(go.Waterfall(
     measure=measure,
     x=df_client_waterfall['variable'],
     textposition="auto",
-    text=df_client_waterfall['value'].apply(lambda x: str(int(round(x, 0)))),
+    text=df_client_waterfall['value'].apply(lambda x: str(int(round(x, 0))) if pd.notna(x) else ''),
     y=df_client_waterfall['value'],
     connector={"line": {"color": "rgb(63, 63, 63)"}},
     cliponaxis=False
@@ -393,6 +397,15 @@ else:
         st.warning("Aucun fonds détecté pour ce contrat dans les allocations.")
     else:
         isins_ctr = set(df_alloc_ctr['Code ISIN'].dropna().unique())
+        # Mapping ISIN -> Nom depuis allocations du contrat (support), prioritaire pour les fonds sans historique.
+        map_isin_nom_alloc = pd.Series(dtype=object)
+        if 'Support' in df_alloc_ctr.columns:
+            map_isin_nom_alloc = (
+                df_alloc_ctr[['Code ISIN', 'Support']]
+                .dropna(subset=['Code ISIN'])
+                .drop_duplicates(subset=['Code ISIN'])
+                .set_index('Code ISIN')['Support']
+            )
         # Mapping ISIN -> Nom depuis fichier perfs
         map_isin_nom = (df_perfs[['Code ISIN','Nom']]
                         .dropna(subset=['Code ISIN'])
@@ -402,7 +415,15 @@ else:
         isins_dispo = [i for i in isins_ctr if i in set(df_perfs['Code ISIN'].dropna().unique())]
         manq = isins_ctr.difference(isins_dispo)
         if manq:
-            st.warning(f"{len(manq)} fonds du contrat sans historique dans {os.path.basename(latest_file)}: {', '.join(list(manq)[:5])}{'…' if len(manq)>5 else ''}")
+            manq_list = sorted(list(manq))
+            manq_labels = []
+            for isin in manq_list:
+                nom = map_isin_nom_alloc.get(isin, map_isin_nom.get(isin, "Nom inconnu"))
+                manq_labels.append(f"{isin} - {nom}")
+            st.warning(
+                f"{len(manq)} fonds du contrat sans historique dans {os.path.basename(latest_file)}: "
+                f"{', '.join(manq_labels[:5])}{'…' if len(manq_labels) > 5 else ''}"
+            )
 
         if len(isins_dispo) == 0:
             st.info("Aucun des fonds du contrat n'est présent dans le fichier de performances.")
@@ -418,6 +439,11 @@ else:
                 date_debut = st.date_input("Date de début", value=default_start, min_value=min_date, max_value=max_date, key="perfo_ctr_start")
             with c2:
                 date_fin = st.date_input("Date de fin", value=max_date, min_value=min_date, max_value=max_date, key="perfo_ctr_end")
+            evt_c1, evt_c2 = st.columns(2)
+            with evt_c1:
+                show_fonds_versements = st.checkbox("Afficher versements", value=True, key=f"fonds_events_contrib_{contrat}")
+            with evt_c2:
+                show_fonds_arbitrages = st.checkbox("Afficher arbitrages", value=True, key=f"fonds_events_arb_{contrat}")
             if date_debut >= date_fin:
                 st.error("La date de début doit être antérieure à la date de fin")
             else:
@@ -448,28 +474,76 @@ else:
                             line=dict(color=colors[i % len(colors)], width=2),
                             hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Performance: %{y:.2f}<extra></extra>'
                         ))
+
+                    # Superposer les événements de flux (TRI) sur la même timeline, optionnels.
+                    movements = tri_analysis.get("movements") if tri_analysis is not None else None
+                    if movements is not None and not movements.empty and (show_fonds_versements or show_fonds_arbitrages):
+                        mv = movements.copy()
+                        mv['date'] = pd.to_datetime(mv['date'], errors='coerce').dt.normalize()
+                        if 'label' not in mv.columns:
+                            mv['label'] = 'Mouvement'
+                        if 'amount_gross' not in mv.columns:
+                            mv['amount_gross'] = 0
+                        if 'amount_net' not in mv.columns:
+                            mv['amount_net'] = 0
+                        mv = mv.dropna(subset=['date'])
+                        mv = mv[(mv['date'] >= pd.to_datetime(date_debut)) & (mv['date'] <= pd.to_datetime(date_fin))]
+
+                        y_min = pd.to_numeric(df_perf_ctr['Performance_base_100'], errors='coerce').min()
+                        y_evt = float(y_min) - 0.25 if pd.notna(y_min) else 99.5
+
+                        if show_fonds_versements:
+                            mv_contrib = mv[mv['movement_type'] == 'contribution'].copy()
+                            if not mv_contrib.empty:
+                                mv_contrib['amount_gross'] = pd.to_numeric(mv_contrib['amount_gross'], errors='coerce').fillna(0)
+                                mv_contrib['amount_net'] = pd.to_numeric(mv_contrib['amount_net'], errors='coerce').fillna(0)
+                                fig.add_trace(go.Scatter(
+                                    x=mv_contrib['date'],
+                                    y=[y_evt] * len(mv_contrib),
+                                    mode='markers',
+                                    name='Versements',
+                                    marker=dict(symbol='triangle-up', size=10, color='#2ca02c', line=dict(width=1, color='#1f7a1f')),
+                                    customdata=mv_contrib[['label', 'amount_gross', 'amount_net']],
+                                    hovertemplate='<b>%{x|%d/%m/%Y}</b><br>%{customdata[0]}<br>Brut: %{customdata[1]:,.0f} €<br>Net: %{customdata[2]:,.0f} €<extra></extra>',
+                                ))
+
+                        if show_fonds_arbitrages:
+                            mv_arb = mv[mv['movement_type'] == 'arbitrage'].copy()
+                            if not mv_arb.empty:
+                                mv_arb['amount_net'] = pd.to_numeric(mv_arb['amount_net'], errors='coerce').fillna(0)
+                                fig.add_trace(go.Scatter(
+                                    x=mv_arb['date'],
+                                    y=[y_evt - 0.12] * len(mv_arb),
+                                    mode='markers',
+                                    name='Arbitrages',
+                                    marker=dict(symbol='diamond', size=9, color='#ff7f0e', line=dict(width=1, color='#c65f00')),
+                                    customdata=mv_arb[['label', 'amount_net']],
+                                    hovertemplate='<b>%{x|%d/%m/%Y}</b><br>%{customdata[0]}<br>Montant: %{customdata[1]:,.0f} €<extra></extra>',
+                                ))
+
                     fig.add_hline(y=100, line_dash='dash', line_color='gray', annotation_text='Base 100', annotation_position='right')
                     fig.update_layout(title=f"Fonds du contrat {contrat} (base 100 au {date_debut.strftime('%d/%m/%Y')})", xaxis_title='Date', yaxis_title='Performance (base 100)', hovermode='x unified', height=500)
                     st.plotly_chart(fig, use_container_width=True)
 
                     # Statistiques par fonds
                     st.caption(f"Données: {os.path.basename(latest_file)}")
+                    stats_rows = []
                     for name in sorted(df_perf_ctr['Nom_fonds'].unique()):
                         dff = df_perf_ctr[df_perf_ctr['Nom_fonds'] == name]
-                        st.subheader(name)
-                        c1, c2, c3, c4 = st.columns(4)
                         perf_tot = dff['Performance_base_100'].iloc[-1] - 100
                         nb_j = (date_fin - date_debut).days
                         rend_ann = ((dff['Performance_base_100'].iloc[-1] / 100) ** (365 / nb_j) - 1) * 100 if nb_j > 0 else 0
                         vola = dff['Rendement'].std() * np.sqrt(252) * 100
-                        with c1:
-                            st.metric("Performance totale", f"{perf_tot:.2f}%")
-                        with c2:
-                            st.metric("Rendement annualisé", f"{rend_ann:.2f}%")
-                        with c3:
-                            st.metric("Volatilité annualisée", f"{vola:.2f}%")
-                        with c4:
-                            st.metric("Nombre de jours", f"{len(dff)}")
+                        stats_rows.append({
+                            'Fonds': name,
+                            'Performance totale (%)': round(float(perf_tot), 2),
+                            'Rendement annualisé (%)': round(float(rend_ann), 2),
+                            'Volatilité annualisée (%)': round(float(vola), 2),
+                            'Nombre de jours': int(len(dff)),
+                        })
+
+                    df_stats = pd.DataFrame(stats_rows).sort_values('Performance totale (%)', ascending=False)
+                    st.dataframe(df_stats, hide_index=True, use_container_width=True)
 
                     # Données + export
                     with st.expander("📊 Voir les données"):

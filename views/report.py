@@ -47,6 +47,11 @@ tri_contracts_df, tri_contracts_map = match_tri_analyses_to_contracts(
 tri_analysis = tri_contracts_map.get(str(contrat))
 source_context = resolve_payment_source(df_contrat_selected, tri_analysis, preferred_source)
 kpi_overrides = build_kpi_overrides(df_contrat_selected, source_context)
+is_per_contract = (
+    not df_contrat_selected.empty
+    and 'Enveloppe' in df_contrat_selected.columns
+    and 'PER' in str(df_contrat_selected['Enveloppe'].iloc[0]).upper()
+)
 
 df_contrat_agg = ss.get('df_contrat_agg_filtered', ss.get('df_contrat_agg', pd.DataFrame()))
 df_historical_for_contract = df_contrat_agg[df_contrat_agg['N° de contrat'] == contrat].copy() if not df_contrat_agg.empty else pd.DataFrame(columns=df_contrat_selected.columns)
@@ -57,7 +62,7 @@ fig_evol_report = build_evolution_figure(
     contrat,
     tri_analysis,
     source_context,
-    add_reduction_ir=(not df_contrat_selected.empty and 'Enveloppe' in df_contrat_selected.columns and df_contrat_selected['Enveloppe'].iloc[0] == 'PER'),
+    add_reduction_ir=is_per_contract,
     ir_num=0.30,
 ) or fig_evol
 fig_tri_report = build_tri_figure(

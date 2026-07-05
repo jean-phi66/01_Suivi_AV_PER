@@ -194,6 +194,16 @@ def build_evolution_figure(
     fig_evol.update_traces(name='Valorisation', showlegend=True)
     fig_evol.update_xaxes(title_text='Date de valorisation')
     fig_evol.update_yaxes(title_text='Valorisation (€)', tickformat=",.0f")
+    fig_evol.update_layout(
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.22,
+            xanchor="center",
+            x=0.5,
+        ),
+        margin=dict(b=110),
+    )
 
     y_values_for_scale = pd.to_numeric(df_combined_plot_data_filtered['Valorisation'], errors='coerce').dropna().tolist()
     used_operation_gross_curve = False
@@ -234,7 +244,7 @@ def build_evolution_figure(
                         )
                         y_values_for_scale.extend(pd.to_numeric(gross_curve["Versements bruts cumulés"], errors="coerce").dropna().tolist())
                         used_operation_gross_curve = True
-                        if ('Enveloppe' in df_current_for_contract.columns and df_current_for_contract['Enveloppe'].iloc[0] == "PER") and add_reduction_ir:
+                        if ('Enveloppe' in df_current_for_contract.columns and 'PER' in str(df_current_for_contract['Enveloppe'].iloc[0]).upper()) and add_reduction_ir:
                             gross_curve["Effort d'épargne"] = gross_curve["Versements bruts cumulés"] * (1 - ir_num)
                             fig_evol.add_trace(
                                 go.Scatter(
@@ -259,7 +269,7 @@ def build_evolution_figure(
             annotation_font_color="red",
         )
         y_values_for_scale.append(float(gross_used))
-        if ('Enveloppe' in df_current_for_contract.columns and df_current_for_contract['Enveloppe'].iloc[0] == "PER") and add_reduction_ir:
+        if ('Enveloppe' in df_current_for_contract.columns and 'PER' in str(df_current_for_contract['Enveloppe'].iloc[0]).upper()) and add_reduction_ir:
             effort_epargne = float(gross_used) * (1 - ir_num)
             fig_evol.add_hline(
                 y=effort_epargne,
@@ -276,14 +286,13 @@ def build_evolution_figure(
     return fig_evol
 
 
-def build_tri_figure(
+def build_tri_history(
     df_historical_for_contract: pd.DataFrame,
     df_current_for_contract: pd.DataFrame,
-    contrat_num: str,
     tri_analysis: dict | None,
 ):
     if tri_analysis is None:
-        return None
+        return pd.DataFrame()
 
     tri_history_source = pd.concat(
         [
@@ -292,8 +301,32 @@ def build_tri_figure(
         ],
         ignore_index=True,
     )
-    tri_history_source = tri_history_source.drop_duplicates(subset=["N° de contrat", "Date de valorisation"], keep="last")
-    tri_history = build_contract_tri_history(tri_analysis, tri_history_source)
+    tri_history_source = tri_history_source.drop_duplicates(
+        subset=["N° de contrat", "Date de valorisation"],
+        keep="last",
+    )
+    return build_contract_tri_history(tri_analysis, tri_history_source)
+
+
+def build_tri_figure(
+    df_historical_for_contract: pd.DataFrame,
+    df_current_for_contract: pd.DataFrame,
+    contrat_num: str,
+    tri_analysis: dict | None,
+    tri_history: pd.DataFrame | None = None,
+    include_versements: bool = True,
+    include_arbitrages: bool = True,
+    include_frais: bool = True,
+):
+    if tri_analysis is None:
+        return None
+
+    if tri_history is None:
+        tri_history = build_tri_history(
+            df_historical_for_contract,
+            df_current_for_contract,
+            tri_analysis,
+        )
     if tri_history.empty:
         return None
 
@@ -344,7 +377,14 @@ def build_tri_figure(
                 "arbitrage": ("Arbitrages", "#d62728", "x"),
                 "ignored_fee": ("Frais", "#9467bd", "triangle-down"),
             }
+            enabled = {
+                "contribution": include_versements,
+                "arbitrage": include_arbitrages,
+                "ignored_fee": include_frais,
+            }
             for movement_type, (label, color, symbol) in event_styles.items():
+                if not enabled.get(movement_type, True):
+                    continue
                 subset = events[events["movement_type"] == movement_type]
                 if subset.empty:
                     continue
@@ -368,6 +408,14 @@ def build_tri_figure(
         yaxis_title="TRI (%)",
         hovermode="x unified",
         height=420,
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.22,
+            xanchor="center",
+            x=0.5,
+        ),
+        margin=dict(b=110),
     )
     apply_readable_yaxis(fig_tri, tri_y_values, min_abs_margin=0.25, clamp_min_zero=False, min_span=0.5)
     return fig_tri

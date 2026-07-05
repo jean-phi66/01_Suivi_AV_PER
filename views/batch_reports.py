@@ -83,7 +83,7 @@ def generate_figures_for_contract(
                 IR_num = 0.0
                 
                 if ('Enveloppe' in df_contrat_selected.columns and 
-                    df_contrat_selected['Enveloppe'].iloc[0] == "PER"):
+                    'PER' in str(df_contrat_selected['Enveloppe'].iloc[0]).upper()):
                     is_per_contract = True
                     add_reduction_IR = True  # Automatiquement activer pour les PER en batch
                     IR_num = 0.30  # TMI 30% par défaut pour les rapports par lot
@@ -187,7 +187,7 @@ def generate_figures_for_contract(
                 df_historical_for_contract = df_contrat_agg[df_contrat_agg['N° de contrat'] == contrat_num].copy()
                 df_current_for_contract = df_contrat_selected.copy()
                 add_reduction_ir = (
-                    'Enveloppe' in df_contrat_selected.columns and df_contrat_selected['Enveloppe'].iloc[0] == "PER"
+                    'Enveloppe' in df_contrat_selected.columns and 'PER' in str(df_contrat_selected['Enveloppe'].iloc[0]).upper()
                 )
                 ir_num = 0.30 if add_reduction_ir else 0.0
                 figures['fig_evol'] = build_evolution_figure(
