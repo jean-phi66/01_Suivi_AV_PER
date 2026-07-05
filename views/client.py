@@ -3,8 +3,23 @@ from streamlit import session_state as ss
 
 import pandas as pd
 
-df_contrats = ss['df_contrats']
-df_allocations = ss['df_allocations']
+df_contrats = ss.get('df_contrats', pd.DataFrame())
+df_allocations = ss.get('df_allocations', pd.DataFrame())
+
+required_contrats_cols = {'Titulaire(s)', 'N° de contrat', 'Enveloppe', 'Partenaire', 'Valorisation'}
+required_alloc_cols = {'Numéro contrat'}
+
+if (
+    df_contrats.empty
+    or df_allocations.empty
+    or not required_contrats_cols.issubset(df_contrats.columns)
+    or not required_alloc_cols.issubset(df_allocations.columns)
+):
+    st.warning("Aucune donnée contrats/allocations disponible.")
+    st.info("Cliquez sur le bouton ci-dessous pour ouvrir l'onglet Données et charger automatiquement les exports.")
+    if st.button("Ouvrir Données"):
+        st.switch_page("views/data_ingestion.py")
+    st.stop()
 
 # Defaults in session_state
 if 'client' not in ss:
