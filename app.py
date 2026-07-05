@@ -1,8 +1,21 @@
 import streamlit as st
 from streamlit import session_state as ss
+import pandas as pd
 from config import DEMO_MODE
 
 st.set_page_config(layout="wide")
+
+# Initialise les DataFrames partages pour eviter les KeyError sur les vues chargees avant l'import.
+for key in [
+    "df_contrats",
+    "df_allocations",
+    "df_contrats_upd",
+    "df_contrat_selected",
+    "df_allocations_client",
+    "df_portfolio",
+]:
+    if key not in ss:
+        ss[key] = pd.DataFrame()
 
 # Afficher le badge du mode demo si activé
 if DEMO_MODE:
@@ -113,6 +126,12 @@ typage_fonds_page = st.Page(
     icon = '🏷️'
 )
 
+gemini_api_page = st.Page(
+    page = 'views/gemini_api.py',
+    title = "Clé Gemini",
+    icon = '🔐'
+)
+
 test_page = st.Page(
     page = 'views/time_serie.py',
     title = 'TEST',
@@ -125,14 +144,13 @@ df_contrat_selected = ss.get("df_contrat_selected")
 if df_contrat_selected is not None and hasattr(df_contrat_selected, "empty") and not df_contrat_selected.empty:
     if "Enveloppe" in df_contrat_selected.columns:
         enveloppe = str(df_contrat_selected["Enveloppe"].iloc[0])
-        show_arbitrage_per = enveloppe == "PER"
+        show_arbitrage_per = "PER" in enveloppe.upper()
         upper_env = enveloppe.upper()
         show_arbitrage_av = "AV" in upper_env or "ASSURANCE" in upper_env
 
 nav_items = {
     "DONNEES": [data_ingestion_page],
     "CLIENT": [client_page, composition_page, perfo_page],
-    "ANALYSE PDF": [tri_pdf_page],
     "OPERATIONS": [page for page in [fiche_per_page if show_arbitrage_per else None,
                                       fiche_av_page if show_arbitrage_av else None]
                     if page is not None],
@@ -143,9 +161,10 @@ nav_items = {
         fonds_portefeuille_page,
         performance_fonds_page,
         tri_portefeuille_page,
-    ],
-    "PARAMETRES": [catalogue_fonds_page, typage_fonds_page],
+    ],    
     "Reporting": [batch_reports_page],
+    "ANALYSE PDF": [tri_pdf_page],
+    "PARAMETRES": [catalogue_fonds_page, typage_fonds_page, gemini_api_page],
 }
 
 pg = st.navigation(nav_items)
