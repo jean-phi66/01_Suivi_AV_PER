@@ -15,6 +15,7 @@ from pathlib import Path
 
 import PyPDF2
 from pdfrw import PdfDict, PdfName, PdfObject, PdfReader, PdfString, PdfWriter
+from gemini_secret import load_gemini_api_key
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 TEMPLATE_PATH = BASE_DIR / "pdf" / "PER" / "Fiche Conseil Vierge Courtage PPv3.pdf"
@@ -627,7 +628,10 @@ def main():
 
     df_contrat_selected = ss["df_contrat_selected"]
     contrat_enveloppe = df_contrat_selected["Enveloppe"].iloc[0] if "Enveloppe" in df_contrat_selected.columns else ""
-    if contrat_enveloppe != "PER":
+    is_per_contract = "PER" in str(contrat_enveloppe).upper()
+    if not is_per_contract and "Contrat" in df_contrat_selected.columns:
+        is_per_contract = "PER" in str(df_contrat_selected["Contrat"].iloc[0]).upper()
+    if not is_per_contract:
         st.warning("La fiche PER est reservee aux contrats PER. Le contrat selectionne n'est pas un PER.")
         return
 
@@ -926,46 +930,55 @@ def main():
 
     with tab_pdf:
         pdf_file = st.file_uploader("PDF arbitrage", type=["pdf"], key="arbitrage_pdf")
-        with st.expander("Extraction d'arbitrage (Gemini)"):
-            model_options = ss.get("gemini_models") or [
-                "gemini-2.5-pro",
-                "gemini-2.5-flash",
-                "gemini-1.5-pro",
-                "gemini-1.5-flash",
-            ]
-            default_model = "gemini-2.5-flash"
-            default_index = model_options.index(default_model) if default_model in model_options else 0
-            col_key, col_model = st.columns([2, 2])
-            with col_key:
-                api_key = st.text_input("Cle API Gemini", type="password")
-            with col_model:
-                model_name = st.selectbox("Modele Gemini", options=model_options, index=default_index)
-            col_list, col_extract = st.columns([1, 1])
-            with col_list:
-                list_models = st.button("Lister les modeles")
-            with col_extract:
-                extract_arbitrage = st.button("Extraire l'arbitrage")
-            if list_models:
-                if not api_key:
-                    st.warning("Cle API requise.")
-                else:
-                    try:
-                        models = _list_gemini_models(api_key)
-                        ss["gemini_models"] = models
-                    except Exception as exc:
-                        st.error(str(exc))
-            if extract_arbitrage:
-                if not api_key or not pdf_file:
-                    st.warning("Cle API et PDF requis.")
-                else:
-                    try:
-                        data = _call_gemini_extract(pdf_file.getvalue(), api_key, model_name=model_name)
-                        ss["arbitrage_extraction"] = data
-                        st.success("Extraction terminee.")
-                    except Exception as exc:
-                        st.error(str(exc))
-            if "arbitrage_extraction" in ss:
-                st.json(ss["arbitrage_extraction"], expanded=False)
+        saved_api_key = load_gemini_api_key()
+        st.subheader("Extraction d'arbitrage (Gemini)")
+        model_options = ss.get("gemini_models") or [
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
+        ]
+        default_model = "gemini-2.5-flash"
+        default_index = model_options.index(default_model) if default_model in model_options else 0
+        if saved_api_key:
+            st.success("Cle Gemini disponible depuis le coffre local chiffre.")
+        else:
+            st.info("Aucune cle Gemini enregistree. Ouvrez la page PARAMETRES -> Cle Gemini.")
+
+        col_hint, col_model = st.columns([2, 2])
+        with col_hint:
+            st.caption("La cle se gere dans la page dediee 'Cle Gemini' du menu PARAMETRES.")
+        with col_model:
+            model_name = st.selectbox("Modele Gemini", options=model_options, index=default_index)
+
+        effective_api_key = saved_api_key.strip()
+
+        col_list, col_extract = st.columns([1, 1])
+        with col_list:
+            list_models = st.button("Lister les modeles")
+        with col_extract:
+            extract_arbitrage = st.button("Extraire l'arbitrage")
+        if list_models:
+            if not effective_api_key:
+                st.warning("Cle API requise.")
+            else:
+                try:
+                    models = _list_gemini_models(effective_api_key)
+                    ss["gemini_models"] = models
+                except Exception as exc:
+                    st.error(str(exc))
+        if extract_arbitrage:
+            if not effective_api_key or not pdf_file:
+                st.warning("Cle API et PDF requis.")
+            else:
+                try:
+                    data = _call_gemini_extract(pdf_file.getvalue(), effective_api_key, model_name=model_name)
+                    ss["arbitrage_extraction"] = data
+                    st.success("Extraction terminee.")
+                except Exception as exc:
+                    st.error(str(exc))
+        if "arbitrage_extraction" in ss:
+            st.json(ss["arbitrage_extraction"], expanded=False)
     montant_operation = ""
     periodicite = ""
 
