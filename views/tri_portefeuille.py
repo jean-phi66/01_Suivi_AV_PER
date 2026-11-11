@@ -7,6 +7,7 @@ from streamlit import session_state as ss
 from tri_integration import (
     build_portfolio_tri_history,
     load_tri_analyses,
+    pdf_dir_signature,
     match_tri_analyses_to_contracts,
     summarize_portfolio_tri_history,
 )
@@ -25,7 +26,8 @@ def format_eur(value):
 
 
 @st.cache_resource(show_spinner=False)
-def get_tri_analyses_resource():
+def get_tri_analyses_resource(pdf_signature: tuple = ()):
+    # pdf_signature sert de cle de cache : toute modification des PDF invalide le cache.
     return load_tri_analyses()
 
 
@@ -40,7 +42,7 @@ if df_contrats.empty:
     st.stop()
 
 tri_matches_df, tri_matches_map = match_tri_analyses_to_contracts(
-    get_tri_analyses_resource(),
+    get_tri_analyses_resource(pdf_dir_signature()),
     df_contrats[["N° de contrat", "Titulaire(s)", "Enveloppe", "Partenaire"]].drop_duplicates().copy(),
 )
 

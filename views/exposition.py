@@ -3,7 +3,15 @@ from streamlit import session_state as ss
 
 import pandas as pd
 import numpy as np
+from io import BytesIO
 from report_generator import generate_exposition_filters_pdf
+
+
+def _build_excel_bytes(df):
+    output = BytesIO()
+    with pd.ExcelWriter(output) as writer:
+        df.to_excel(writer, index=False, sheet_name="Contrats")
+    return output.getvalue()
 
 df_allocations = ss['df_allocations']
 df_contrats = ss['df_contrats']
@@ -99,6 +107,17 @@ with tab2:
                 st.metric("Fonds recherchés", len(fonds_selectionnes))
             
             st.dataframe(contrats_resume)
+
+            try:
+                excel_bytes = _build_excel_bytes(contrats_resume)
+                st.download_button(
+                    "Exporter en Excel",
+                    data=excel_bytes,
+                    file_name="exposition_contrats.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            except Exception as exc:
+                st.warning(f"Export Excel indisponible: {exc}")
 
             # Export PDF des résultats de filtres
             with st.container():

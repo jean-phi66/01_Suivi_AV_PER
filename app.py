@@ -28,6 +28,12 @@ data_ingestion_page = st.Page(
     default=True
 )
 
+extranet_proxeema_page = st.Page(
+    page = 'views/extranet_proxeema.py',
+    title = 'Import Proxeema',
+    icon='🔄'
+)
+
 client_page = st.Page(
     page = 'views/client.py',
     title = 'Sélection contrat',
@@ -50,6 +56,12 @@ batch_reports_page = st.Page(
     page = 'views/batch_reports.py',
     title = "Rapport pdf",
     icon = '🧾'
+)
+
+pptx_report_page = st.Page(
+    page = 'views/pptx_report.py',
+    title = "Bilan PowerPoint",
+    icon = '📊'
 )
 
 fiche_per_page = st.Page(
@@ -149,7 +161,7 @@ if df_contrat_selected is not None and hasattr(df_contrat_selected, "empty") and
         show_arbitrage_av = "AV" in upper_env or "ASSURANCE" in upper_env
 
 nav_items = {
-    "DONNEES": [data_ingestion_page],
+    "DONNEES": [data_ingestion_page, extranet_proxeema_page],
     "CLIENT": [client_page, composition_page, perfo_page],
     "OPERATIONS": [page for page in [fiche_per_page if show_arbitrage_per else None,
                                       fiche_av_page if show_arbitrage_av else None]
@@ -162,7 +174,7 @@ nav_items = {
         performance_fonds_page,
         tri_portefeuille_page,
     ],    
-    "Reporting": [batch_reports_page],
+    "Reporting": [batch_reports_page, pptx_report_page],
     "ANALYSE PDF": [tri_pdf_page],
     "PARAMETRES": [catalogue_fonds_page, typage_fonds_page, gemini_api_page],
 }

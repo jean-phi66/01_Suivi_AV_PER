@@ -8,3 +8,4 @@ PyPDF2>=3.0.1
 pdfrw>=0.4
 requests>=2.31.0
 cryptography>=43.0.0
+python-pptx>=1.0.0

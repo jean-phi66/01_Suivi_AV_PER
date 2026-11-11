@@ -3,21 +3,29 @@
     "Action": "Actions",
     "Action Grande Capitalisation": "Actions",
     "Action Petite & Moyenne Capitalisation": "Actions",
+    "Actions": "Actions",
+    "Allocation d'actifs": "Allocation flexible",
     "Alt - Long/Short Actions": "Long-Short",
     "Autres": "Allocation flexible",
     "Capital Risque": "Private Equity",
     "Diversifié -Profil Prudent": "Allocation flexible",
     "Diversifié Flexible": "Allocation flexible",
     "Diversifié Profil Equilibre": "Allocation flexible",
+    "FCPR": "Allocation flexible",
     "Fonds en Euros": "Fonds euros",
     "Immobilier": "Immobilier",
+    "Monétaire": "Obligataire",
     "OPCI": "Immobilier",
+    "Obligataire": "Obligataire",
     "Obligations Court Terme": "Obligataire",
     "Obligations Emprunts Privés": "Obligataire",
     "Obligations Flexibles": "Obligataire",
     "Obligations Haut Rendement": "Obligataire",
     "Obligations à Echéance": "Obligataire",
+    "Performance absolue": "Allocation flexible",
+    "Produits Structurés": "Produit structuré",
     "SCI": "Immobilier",
+    "Support en euro": "Fonds euros",
     "Trésorerie Régulière": "Fonds euros",
     "Trésorerie régulière": "Fonds euros"
   },
@@ -33,6 +41,14 @@
     {
       "Mot-clé support": "excel",
       "Catégorie simplifiée": "Produit structuré"
+    },
+    {
+      "Mot-clé support": "Eurazeo",
+      "Catégorie simplifiée": "Private Equity"
+    },
+    {
+      "Mot-clé support": "Apeo",
+      "Catégorie simplifiée": "Private Equity"
     }
   ]
 }

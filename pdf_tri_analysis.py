@@ -66,14 +66,58 @@ def _extract_match(pattern: re.Pattern[str], text: str, group: int = 1, default:
     return match.group(group).strip()
 
 
+def _classify_operation_subtype(label: str, movement_type: str) -> str:
+    upper = (label or "").upper()
+    if movement_type == "contribution":
+        if "SOUSCRIPTION" in upper or "ADHESION" in upper:
+            return "Souscription / Adhésion"
+        if "PROGRAM" in upper or "PROG" in upper:
+            return "Versement programmé"
+        return "Versement libre"
+    if movement_type == "arbitrage":
+        if "FUSION" in upper or "ABSORPTION" in upper:
+            return "Fusion / Absorption"
+        if "PROGRESSIF" in upper or "PROG" in upper:
+            return "Arbitrage invest. progressif"
+        return "Arbitrage libre"
+    if movement_type == "redemption":
+        return "Rachat"
+    return "Autre"
+
+
+def _merge_wrapped_movement_lines(raw_text: str) -> list[str]:
+    """Reconstitue les lignes de mouvements coupées sur deux lignes dans les PDF Suravenir."""
+    raw_lines = [" ".join(line.split()) for line in raw_text.splitlines()]
+    merged: list[str] = []
+    date_start_re = re.compile(r"^\d{2}/\d{2}/\d{4}\b")
+    amount_end_re = re.compile(r"-?[0-9\s]+,\d{2}$")
+
+    i = 0
+    while i < len(raw_lines):
+        line = raw_lines[i]
+        if not line:
+            i += 1
+            continue
+        if date_start_re.match(line) and not amount_end_re.search(line) and i + 1 < len(raw_lines):
+            nxt = raw_lines[i + 1]
+            if nxt and not date_start_re.match(nxt) and amount_end_re.search(nxt):
+                # Insérer un espace avant un montant négatif collé au libellé (ex: CONTRAT-2,80)
+                nxt_fixed = re.sub(r"([A-Za-zÀ-ÖØ-öø-ÿ])(-?[0-9\s]+,\d{2})$", r"\1 \2", nxt)
+                merged.append(f"{line} {nxt_fixed}")
+                i += 2
+                continue
+        merged.append(line)
+        i += 1
+    return merged
+
+
 def _parse_movements(text: str, valuation_date: pd.Timestamp) -> pd.DataFrame:
     section_match = MOVEMENTS_SECTION_PATTERN.search(text)
     if not section_match:
-        return pd.DataFrame(columns=["date", "label", "amount_net", "movement_type", "include_in_irr"])
+        return pd.DataFrame(columns=["date", "label", "amount_net", "movement_type", "operation_subtype", "include_in_irr"])
 
     rows: list[dict[str, object]] = []
-    for raw_line in section_match.group(1).splitlines():
-        line = " ".join(raw_line.split())
+    for line in _merge_wrapped_movement_lines(section_match.group(1)):
         if not line:
             continue
         match = MOVEMENT_LINE_PATTERN.match(line)
@@ -92,6 +136,10 @@ def _parse_movements(text: str, valuation_date: pd.Timestamp) -> pd.DataFrame:
         include_in_irr = False
         if "ARBITRAGE" in upper_label:
             movement_type = "arbitrage"
+        elif "BONUS" in upper_label:
+            # Ex: "BONUS VERSEMENT FDS EUR DU CONTR" = bonus de rendement du fonds euros,
+            # assimile a une revalorisation (pas un apport du client).
+            movement_type = "ignored_fee"
         elif "RACHAT" in upper_label:
             movement_type = "redemption"
             include_in_irr = True
@@ -115,12 +163,13 @@ def _parse_movements(text: str, valuation_date: pd.Timestamp) -> pd.DataFrame:
                 "label": label,
                 "amount_net": amount_net,
                 "movement_type": movement_type,
+                "operation_subtype": _classify_operation_subtype(label, movement_type),
                 "include_in_irr": include_in_irr,
             }
         )
 
     if not rows:
-        return pd.DataFrame(columns=["date", "label", "amount_net", "movement_type", "include_in_irr"])
+        return pd.DataFrame(columns=["date", "label", "amount_net", "movement_type", "operation_subtype", "include_in_irr"])
 
     return pd.DataFrame(rows).sort_values(["date", "label"]).reset_index(drop=True)
 
@@ -231,8 +280,20 @@ def parse_contract_pdf(pdf_path: Path) -> ParsedContract:
                 movements.loc[redemption_mask, "amount_gross"] = (
                     movements.loc[redemption_mask, "amount_net"] * redemption_ratio
                 )
+        movements["fees_amount"] = 0.0
+        movements["fees_rate"] = 0.0
+        if contribution_mask.any():
+            movements.loc[contribution_mask, "fees_amount"] = (
+                movements.loc[contribution_mask, "amount_gross"] - movements.loc[contribution_mask, "amount_net"]
+            )
+            valid_gross = contribution_mask & (movements["amount_gross"] > 0)
+            movements.loc[valid_gross, "fees_rate"] = (
+                movements.loc[valid_gross, "fees_amount"] / movements.loc[valid_gross, "amount_gross"]
+            )
     else:
         movements["amount_gross"] = pd.Series(dtype=float)
+        movements["fees_amount"] = pd.Series(dtype=float)
+        movements["fees_rate"] = pd.Series(dtype=float)
 
     return ParsedContract(
         file_path=pdf_path,

@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.express as px
 
 from analyse_SRI import generate_fig_SRI
-from typage_fonds_utils import load_typage_config, map_simplified_type
+from reporting_helpers import build_composition_figures
 
 st.title("Analyse de l'allocation")
 
@@ -25,40 +25,22 @@ st.write(df_contrat_selected['Titulaire(s)'].iloc[0], '-',
 # Analyse typologie
 col_typologie, col_typologie_simplifiee = st.columns(2)
 
-mapping_simplifie, support_rules = load_typage_config(MAPPING_PATH)
-df_allocations_client = df_allocations_client.copy()
-
-
-df_allocations_client['Type simplifié'] = df_allocations_client.apply(
-    lambda row: map_simplified_type(row.get('Type'), row.get('Support'), mapping_simplifie, support_rules),
-    axis=1
-)
-
-fig_typologie = px.pie(df_allocations_client,
-                       values='Encours en €', names='Type', hole=.5)
-fig_typologie.update_layout(
-    title="Typologie des supports")
-with col_typologie:
-    st.plotly_chart(fig_typologie, use_container_width=False)
-
-fig_typologie_simplifiee = px.pie(
+df_allocations_client, fig_typologie, fig_typologie_simplifiee, fig_supports = build_composition_figures(
     df_allocations_client,
-    values='Encours en €',
-    names='Type simplifié',
-    hole=.5,
+    mapping_path=MAPPING_PATH,
 )
-fig_typologie_simplifiee.update_layout(
-    title="Typologie simplifiée des supports"
-)
+
+with col_typologie:
+    if fig_typologie is not None:
+        st.plotly_chart(fig_typologie, use_container_width=False)
+
 with col_typologie_simplifiee:
-    st.plotly_chart(fig_typologie_simplifiee, use_container_width=False)
+    if fig_typologie_simplifiee is not None:
+        st.plotly_chart(fig_typologie_simplifiee, use_container_width=False)
 
 # Analyse Supports
-fig_supports = px.pie(df_allocations_client,
-                      values='Encours en €', names='Support', hole=.5)
-fig_supports.update_layout(
-    title="Répartition par support")
-st.plotly_chart(fig_supports, use_container_width=False)
+if fig_supports is not None:
+    st.plotly_chart(fig_supports, use_container_width=False)
     
 st.dataframe(df_allocations_client.drop(["Prestation", "Nom", "Prénom", "Civilité",
                                                       "Identifiant", "Numéro contrat", "SRRI", "Consultant", "Titulaire(s)",

@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import glob
+import os
+from pathlib import Path
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+from config import REAL_DATA_FONDS_PATH
 from tri_integration import build_contract_tri_history
+from typage_fonds_utils import load_typage_config, map_simplified_type
+from waterfall_graphs import generate_allocations_waterfall, generate_contrats_waterfall
+
+DEFAULT_MAPPING_PATH = Path(__file__).resolve().parent / "defaults" / "typage_fonds_portefeuille.json"
 
 
 def apply_readable_yaxis(
@@ -153,6 +162,8 @@ def build_evolution_figure(
     source_context: dict[str, object],
     add_reduction_ir: bool = False,
     ir_num: float = 0.0,
+    include_versements: bool = True,
+    include_arbitrages: bool = True,
 ):
     required_cols = ['N° de contrat', 'Date de valorisation', 'Valorisation', 'Titulaire(s)']
     missing_historical = [col for col in required_cols if col not in df_historical_for_contract.columns]
@@ -163,6 +174,13 @@ def build_evolution_figure(
     df_historical_for_plot = df_historical_for_contract[required_cols].copy()
     df_current_for_plot = df_current_for_contract[required_cols].copy()
     df_combined_plot_data = pd.concat([df_historical_for_plot, df_current_for_plot], ignore_index=True)
+    df_combined_plot_data['Date de valorisation'] = pd.to_datetime(
+        df_combined_plot_data['Date de valorisation'], errors='coerce'
+    ).dt.normalize()
+    df_combined_plot_data['Valorisation'] = pd.to_numeric(
+        df_combined_plot_data['Valorisation'], errors='coerce'
+    )
+    df_combined_plot_data = df_combined_plot_data.dropna(subset=['Date de valorisation', 'Valorisation'])
     df_combined_plot_data.drop_duplicates(subset=['N° de contrat', 'Date de valorisation'], inplace=True)
     df_combined_plot_data.sort_values(by='Date de valorisation', inplace=True)
     if df_combined_plot_data.empty:
@@ -281,6 +299,68 @@ def build_evolution_figure(
                 annotation_font_color="green",
             )
             y_values_for_scale.append(float(effort_epargne))
+
+    # Superposer les événements (versements / arbitrages) sur la courbe de VL du contrat
+    if tri_analysis is not None and (include_versements or include_arbitrages):
+        movements = tri_analysis.get("movements")
+        if movements is not None and not movements.empty and not df_combined_plot_data_filtered.empty:
+            vl_anchor = df_combined_plot_data_filtered[["Date de valorisation", "Valorisation"]].copy().sort_values("Date de valorisation")
+            vl_anchor["anchor_y"] = pd.to_numeric(vl_anchor["Valorisation"], errors="coerce")
+            vl_anchor = vl_anchor.dropna(subset=["Date de valorisation", "anchor_y"])
+            events = movements.copy()
+            events["date"] = pd.to_datetime(events["date"], errors="coerce").dt.normalize()
+            if "label" not in events.columns:
+                events["label"] = "Mouvement"
+            if "amount_net" not in events.columns:
+                events["amount_net"] = 0.0
+            if "amount_gross" not in events.columns:
+                events["amount_gross"] = events["amount_net"]
+            events = events.dropna(subset=["date"]).sort_values("date")
+            if not events.empty and not vl_anchor.empty:
+                events = pd.merge_asof(
+                    events,
+                    vl_anchor[["Date de valorisation", "anchor_y"]],
+                    left_on="date",
+                    right_on="Date de valorisation",
+                    direction="backward",
+                )
+                if events["anchor_y"].isna().any():
+                    events["anchor_y"] = events["anchor_y"].fillna(vl_anchor["anchor_y"].iloc[0])
+
+                if include_versements:
+                    subset_v = events[events["movement_type"] == "contribution"].copy()
+                    if not subset_v.empty:
+                        subset_v["amount_gross"] = pd.to_numeric(subset_v["amount_gross"], errors="coerce").fillna(0.0)
+                        subset_v["amount_net"] = pd.to_numeric(subset_v["amount_net"], errors="coerce").fillna(0.0)
+                        y_values_for_scale.extend(pd.to_numeric(subset_v["anchor_y"], errors="coerce").dropna().tolist())
+                        fig_evol.add_trace(
+                            go.Scatter(
+                                x=subset_v["date"],
+                                y=subset_v["anchor_y"],
+                                mode="markers",
+                                name="Versements",
+                                marker=dict(color="#2ca02c", size=11, symbol="diamond", line=dict(width=1, color="#145214")),
+                                customdata=subset_v[["label", "amount_gross", "amount_net"]],
+                                hovertemplate="<b>%{x|%d/%m/%Y}</b><br>%{customdata[0]}<br>Brut: %{customdata[1]:,.0f} € | Net: %{customdata[2]:,.0f} €<extra></extra>",
+                            )
+                        )
+
+                if include_arbitrages:
+                    subset_a = events[events["movement_type"] == "arbitrage"].copy()
+                    if not subset_a.empty:
+                        subset_a["amount_net"] = pd.to_numeric(subset_a["amount_net"], errors="coerce").fillna(0.0)
+                        y_values_for_scale.extend(pd.to_numeric(subset_a["anchor_y"], errors="coerce").dropna().tolist())
+                        fig_evol.add_trace(
+                            go.Scatter(
+                                x=subset_a["date"],
+                                y=subset_a["anchor_y"],
+                                mode="markers",
+                                name="Arbitrages",
+                                marker=dict(color="#d62728", size=11, symbol="x", line=dict(width=1, color="#7f1d1d")),
+                                customdata=subset_a[["label", "amount_net"]],
+                                hovertemplate="<b>%{x|%d/%m/%Y}</b><br>%{customdata[0]}<br>Montant: %{customdata[1]:,.0f} €<extra></extra>",
+                            )
+                        )
 
     apply_readable_yaxis(fig_evol, y_values_for_scale)
     return fig_evol
@@ -419,3 +499,478 @@ def build_tri_figure(
     )
     apply_readable_yaxis(fig_tri, tri_y_values, min_abs_margin=0.25, clamp_min_zero=False, min_span=0.5)
     return fig_tri
+
+
+def build_composition_figures(
+    df_allocations_client: pd.DataFrame,
+    mapping_path: Path | None = None,
+) -> tuple[pd.DataFrame, go.Figure | None, go.Figure | None, go.Figure | None]:
+    """Construit les graphiques donut de composition (typologie, typologie simplifiée et supports)."""
+    if df_allocations_client is None or df_allocations_client.empty:
+        return pd.DataFrame(), None, None, None
+
+    cfg_path = mapping_path or DEFAULT_MAPPING_PATH
+    mapping_simplifie, support_rules = load_typage_config(cfg_path)
+    df_alloc_work = df_allocations_client.copy()
+    if 'Encours en €' in df_alloc_work.columns:
+        df_alloc_work['Encours en €'] = pd.to_numeric(df_alloc_work['Encours en €'], errors='coerce').fillna(0.0)
+
+    df_alloc_work['Type simplifié'] = df_alloc_work.apply(
+        lambda row: map_simplified_type(row.get('Type'), row.get('Support'), mapping_simplifie, support_rules),
+        axis=1,
+    )
+
+    fig_typologie = None
+    if 'Type' in df_alloc_work.columns:
+        fig_typologie = px.pie(df_alloc_work, values='Encours en €', names='Type', hole=0.5)
+        fig_typologie.update_layout(title="Typologie des supports")
+
+    fig_typologie_simplifiee = px.pie(
+        df_alloc_work,
+        values='Encours en €',
+        names='Type simplifié',
+        hole=0.5,
+    )
+    fig_typologie_simplifiee.update_layout(title="Typologie simplifiée des supports")
+
+    fig_supports = None
+    if 'Support' in df_alloc_work.columns:
+        fig_supports = px.pie(df_alloc_work, values='Encours en €', names='Support', hole=0.5)
+        fig_supports.update_layout(title="Répartition par support")
+
+    return df_alloc_work, fig_typologie, fig_typologie_simplifiee, fig_supports
+
+
+def build_contract_waterfall_figure(
+    df_contrats_all: pd.DataFrame,
+    df_allocations_all: pd.DataFrame,
+    df_contrat_selected: pd.DataFrame,
+    contrat_num: str,
+    source_context: dict[str, object],
+    add_reduction_ir: bool | None = None,
+    ir_num: float = 0.30,
+) -> go.Figure | None:
+    """Construit le waterfall de performance du contrat (avec avantage fiscal 30% auto pour les PER)."""
+    if df_contrat_selected is None or df_contrat_selected.empty or df_allocations_all is None:
+        return None
+
+    is_per_contract = (
+        'Enveloppe' in df_contrat_selected.columns
+        and 'PER' in str(df_contrat_selected['Enveloppe'].iloc[0]).upper()
+    )
+    if add_reduction_ir is None:
+        effective_add_ir = is_per_contract
+        effective_ir = float(ir_num) if is_per_contract else 0.0
+    else:
+        effective_add_ir = bool(add_reduction_ir) and is_per_contract
+        effective_ir = float(ir_num) if effective_add_ir else 0.0
+
+    df_contrats = df_contrats_all.copy()
+    df_summary_allocations = df_allocations_all[~df_allocations_all['Type'].isin(["Fonds en Euros"])].copy()
+    df_summary_allocations['+/- value (en €)'] = pd.to_numeric(
+        df_summary_allocations['+/- value (en €)'], errors='coerce'
+    ).fillna(0.0)
+    df_summary_allocations = (
+        df_summary_allocations.groupby('Numéro contrat')['+/- value (en €)'].sum().reset_index()
+    )
+
+    df_contrats_upd = pd.merge(
+        df_contrats,
+        df_summary_allocations,
+        how='left',
+        left_on='N° de contrat',
+        right_on='Numéro contrat',
+    )
+    df_contrats_upd['+/- value (en €)'] = pd.to_numeric(
+        df_contrats_upd['+/- value (en €)'], errors='coerce'
+    ).fillna(0.0)
+    df_contrats_upd['Performance embarquée'] = (
+        df_contrats_upd['Performance financière en euros (perf du contrat)'] - df_contrats_upd['+/- value (en €)']
+    )
+    df_contrats_upd.rename(columns={'+/- value (en €)': 'Performance allocation'}, inplace=True)
+
+    if (
+        source_context.get('source_effective') == "Releve d'operations TRI"
+        and source_context.get('gross_used') is not None
+        and source_context.get('net_used') is not None
+    ):
+        mask_contrat = df_contrats_upd['N° de contrat'].astype(str) == str(contrat_num)
+        if mask_contrat.any():
+            gross_used = float(source_context['gross_used'])
+            net_used = float(source_context['net_used'])
+            df_contrats_upd.loc[mask_contrat, 'Montant total des versements bruts'] = gross_used
+            df_contrats_upd.loc[mask_contrat, 'Montant total des versements nets'] = net_used
+            df_contrats_upd.loc[mask_contrat, 'Frais'] = net_used - gross_used
+            df_contrats_upd.loc[mask_contrat, 'Performance financière en euros (perf du contrat)'] = (
+                df_contrats_upd.loc[mask_contrat, 'Valorisation'] - net_used
+            )
+            df_contrats_upd.loc[mask_contrat, 'Performance embarquée'] = (
+                df_contrats_upd.loc[mask_contrat, 'Performance financière en euros (perf du contrat)']
+                - df_contrats_upd.loc[mask_contrat, 'Performance allocation']
+            )
+
+    df_client_waterfall, measure = generate_contrats_waterfall(
+        df_contrats_upd, contrat_num, effective_add_ir, effective_ir
+    )
+    if df_client_waterfall.empty:
+        return None
+
+    fig = go.Figure(
+        go.Waterfall(
+            name="20",
+            orientation="v",
+            measure=measure,
+            x=df_client_waterfall['variable'],
+            textposition="auto",
+            text=df_client_waterfall['value'].apply(lambda x: str(int(round(x, 0))) if pd.notna(x) else ''),
+            y=df_client_waterfall['value'],
+            connector={"line": {"color": "rgb(63, 63, 63)"}},
+            cliponaxis=False,
+        )
+    )
+    if effective_add_ir:
+        title = f"Situation contrat PER (avec avantage fiscal {int(round(effective_ir * 100))}%)"
+    else:
+        title = "Situation contrat"
+    fig.update_layout(title=title, showlegend=False)
+    return fig
+
+
+def build_allocation_waterfall_figure(
+    df_allocations_all: pd.DataFrame,
+    contrat_num: str,
+) -> go.Figure | None:
+    """Construit le waterfall de performance de l'allocation par support."""
+    if df_allocations_all is None or df_allocations_all.empty:
+        return None
+
+    df_alloc_ctr = df_allocations_all[df_allocations_all['Numéro contrat'] == contrat_num].copy()
+    if df_alloc_ctr.empty:
+        return None
+
+    df_allocations_waterfall = generate_allocations_waterfall(df_allocations_all.copy(), contrat_num)
+    if df_allocations_waterfall.empty:
+        return None
+
+    fig = go.Figure(
+        go.Waterfall(
+            name="20",
+            orientation="v",
+            measure=df_allocations_waterfall['measure'],
+            x=df_allocations_waterfall['Support'],
+            textposition="auto",
+            text=df_allocations_waterfall['+/- value (en €)'].apply(
+                lambda x: str(int(round(x, 0))) if pd.notna(x) else ''
+            ),
+            y=df_allocations_waterfall['+/- value (en €)'],
+            connector={"line": {"color": "rgb(63, 63, 63)"}},
+            cliponaxis=False,
+        )
+    )
+    fig.update_layout(title="Performance allocation", showlegend=False)
+    return fig
+
+
+def load_latest_fund_perf_file(fonds_dir: str | Path | None = None) -> tuple[pd.DataFrame, str | None]:
+    """Charge le fichier CSV de performances quotidiennes (*Top*.csv) le plus récent."""
+    target_dir = str(fonds_dir or REAL_DATA_FONDS_PATH)
+    try:
+        top_files = glob.glob(os.path.join(target_dir, "*Top*.csv"))
+    except Exception:
+        top_files = []
+
+    if not top_files:
+        return pd.DataFrame(), None
+
+    latest_file = max(top_files, key=os.path.getmtime)
+    try:
+        df_perfs = pd.read_csv(latest_file, sep=';', decimal=',', encoding='latin-1')
+    except UnicodeDecodeError:
+        df_perfs = pd.read_csv(latest_file, sep=';', decimal=',', encoding='utf-8', errors='ignore')
+
+    df_perfs['Date'] = pd.to_datetime(df_perfs['Date'], format='%d/%m/%Y', errors='coerce')
+    if df_perfs['Rendement'].dtype == 'object':
+        df_perfs['Rendement'] = df_perfs['Rendement'].astype(str).str.replace(',', '.', regex=False).astype(float)
+    df_perfs = df_perfs.dropna(subset=['Date']).sort_values('Date')
+    return df_perfs, latest_file
+
+
+def prepare_contract_fund_perf_data(
+    df_perfs: pd.DataFrame,
+    df_alloc_ctr: pd.DataFrame,
+    date_debut,
+    date_fin,
+    mapping_path: Path | None = None,
+) -> dict[str, object]:
+    """Prépare les séries base 100 des fonds du contrat et leur rattachement aux classes d'actifs simplifiées."""
+    empty_result: dict[str, object] = {
+        "df_perf_ctr": pd.DataFrame(),
+        "isins_dispo": [],
+        "missing_labels": [],
+        "type_order": [],
+    }
+    if df_perfs.empty or df_alloc_ctr.empty or 'Code ISIN' not in df_alloc_ctr.columns:
+        return empty_result
+
+    cfg_path = mapping_path or DEFAULT_MAPPING_PATH
+    mapping_simplifie, support_rules = load_typage_config(cfg_path)
+
+    df_alloc_work = df_alloc_ctr.copy()
+    df_alloc_work['Type simplifié'] = df_alloc_work.apply(
+        lambda row: map_simplified_type(row.get('Type'), row.get('Support'), mapping_simplifie, support_rules),
+        axis=1,
+    )
+    if 'Encours en €' in df_alloc_work.columns:
+        df_alloc_work['Encours en €'] = pd.to_numeric(df_alloc_work['Encours en €'], errors='coerce').fillna(0.0)
+    else:
+        df_alloc_work['Encours en €'] = 0.0
+
+    isins_ctr = set(df_alloc_work['Code ISIN'].dropna().astype(str).str.strip().unique()) - {''}
+    if not isins_ctr:
+        return empty_result
+
+    map_isin_nom_alloc = pd.Series(dtype=object)
+    if 'Support' in df_alloc_work.columns:
+        map_isin_nom_alloc = (
+            df_alloc_work[['Code ISIN', 'Support']]
+            .dropna(subset=['Code ISIN'])
+            .drop_duplicates(subset=['Code ISIN'])
+            .set_index('Code ISIN')['Support']
+        )
+
+    map_isin_type = (
+        df_alloc_work[['Code ISIN', 'Type simplifié']]
+        .dropna(subset=['Code ISIN'])
+        .drop_duplicates(subset=['Code ISIN'])
+        .set_index('Code ISIN')['Type simplifié']
+    )
+
+    map_isin_nom = (
+        df_perfs[['Code ISIN', 'Nom']]
+        .dropna(subset=['Code ISIN'])
+        .drop_duplicates(subset=['Code ISIN'])
+        .set_index('Code ISIN')['Nom']
+    )
+
+    perfs_isins = set(df_perfs['Code ISIN'].dropna().astype(str).str.strip().unique())
+    isins_dispo = [i for i in isins_ctr if i in perfs_isins]
+    manq = isins_ctr.difference(isins_dispo)
+    missing_labels = []
+    for isin in sorted(manq):
+        nom = map_isin_nom_alloc.get(isin, map_isin_nom.get(isin, "Nom inconnu"))
+        missing_labels.append(f"{isin} - {nom}")
+
+    if not isins_dispo:
+        empty_result["missing_labels"] = missing_labels
+        return empty_result
+
+    start_ts = pd.to_datetime(date_debut)
+    end_ts = pd.to_datetime(date_fin)
+    df_sel = df_perfs[df_perfs['Code ISIN'].isin(isins_dispo)]
+    df_periode = df_sel[(df_sel['Date'] >= start_ts) & (df_sel['Date'] <= end_ts)].copy()
+
+    perf_list = []
+    for isin in isins_dispo:
+        d = df_periode[df_periode['Code ISIN'] == isin].copy()
+        if d.empty:
+            continue
+        d['Valeur_cumul'] = (1 + d['Rendement']).cumprod()
+        base = d['Valeur_cumul'].iloc[0]
+        if pd.isna(base) or base == 0:
+            continue
+        d['Performance_base_100'] = (d['Valeur_cumul'] / base) * 100
+        d['Nom_fonds'] = map_isin_nom.get(isin, map_isin_nom_alloc.get(isin, isin))
+        d['Type simplifié'] = map_isin_type.get(isin, 'Allocation flexible')
+        perf_list.append(d)
+
+    if not perf_list:
+        empty_result["isins_dispo"] = isins_dispo
+        empty_result["missing_labels"] = missing_labels
+        return empty_result
+
+    df_perf_ctr = pd.concat(perf_list, ignore_index=True)
+
+    # Ordonner les classes d'actifs présentes par encours décroissant dans le contrat
+    present_types = set(df_perf_ctr['Type simplifié'].dropna().unique())
+    encours_by_type = (
+        df_alloc_work[df_alloc_work['Type simplifié'].isin(present_types)]
+        .groupby('Type simplifié')['Encours en €']
+        .sum()
+        .sort_values(ascending=False)
+    )
+    type_order = encours_by_type.index.tolist()
+    for t in sorted(present_types):
+        if t not in type_order:
+            type_order.append(t)
+
+    return {
+        "df_perf_ctr": df_perf_ctr,
+        "isins_dispo": isins_dispo,
+        "missing_labels": missing_labels,
+        "type_order": type_order,
+    }
+
+
+def build_fund_evolution_figure(
+    df_perf_subset: pd.DataFrame,
+    title: str,
+    tri_analysis: dict | None = None,
+    date_debut=None,
+    date_fin=None,
+    show_versements: bool = True,
+    show_arbitrages: bool = True,
+    height: int = 500,
+    color_map: dict[str, str] | None = None,
+) -> go.Figure | None:
+    """Construit un graphique base 100 pour un sous-ensemble de fonds avec versements/arbitrages."""
+    if df_perf_subset is None or df_perf_subset.empty:
+        return None
+
+    fig = go.Figure()
+    colors = px.colors.qualitative.T10
+    for i, name in enumerate(sorted(df_perf_subset['Nom_fonds'].unique())):
+        d = df_perf_subset[df_perf_subset['Nom_fonds'] == name]
+        line_color = color_map[name] if (color_map and name in color_map) else colors[i % len(colors)]
+        fig.add_trace(
+            go.Scatter(
+                x=d['Date'],
+                y=d['Performance_base_100'],
+                mode='lines',
+                name=name,
+                line=dict(color=line_color, width=2),
+                hovertemplate='<b>%{x|%d/%m/%Y}</b><br>Performance: %{y:.2f}<extra></extra>',
+            )
+        )
+
+    movements = tri_analysis.get("movements") if tri_analysis is not None else None
+    if movements is not None and not movements.empty and (show_versements or show_arbitrages):
+        mv = movements.copy()
+        mv['date'] = pd.to_datetime(mv['date'], errors='coerce').dt.normalize()
+        if 'label' not in mv.columns:
+            mv['label'] = 'Mouvement'
+        if 'amount_gross' not in mv.columns:
+            mv['amount_gross'] = 0
+        if 'amount_net' not in mv.columns:
+            mv['amount_net'] = 0
+        mv = mv.dropna(subset=['date'])
+        if date_debut is not None:
+            mv = mv[mv['date'] >= pd.to_datetime(date_debut)]
+        if date_fin is not None:
+            mv = mv[mv['date'] <= pd.to_datetime(date_fin)]
+
+        y_min = pd.to_numeric(df_perf_subset['Performance_base_100'], errors='coerce').min()
+        y_evt = float(y_min) - 0.25 if pd.notna(y_min) else 99.5
+
+        if show_versements:
+            mv_contrib = mv[mv['movement_type'] == 'contribution'].copy()
+            if not mv_contrib.empty:
+                mv_contrib['amount_gross'] = pd.to_numeric(mv_contrib['amount_gross'], errors='coerce').fillna(0)
+                mv_contrib['amount_net'] = pd.to_numeric(mv_contrib['amount_net'], errors='coerce').fillna(0)
+                fig.add_trace(
+                    go.Scatter(
+                        x=mv_contrib['date'],
+                        y=[y_evt] * len(mv_contrib),
+                        mode='markers',
+                        name='Versements',
+                        marker=dict(symbol='triangle-up', size=10, color='#2ca02c', line=dict(width=1, color='#1f7a1f')),
+                        customdata=mv_contrib[['label', 'amount_gross', 'amount_net']],
+                        hovertemplate='<b>%{x|%d/%m/%Y}</b><br>%{customdata[0]}<br>Brut: %{customdata[1]:,.0f} €<br>Net: %{customdata[2]:,.0f} €<extra></extra>',
+                    )
+                )
+
+        if show_arbitrages:
+            mv_arb = mv[mv['movement_type'] == 'arbitrage'].copy()
+            if not mv_arb.empty:
+                mv_arb['amount_net'] = pd.to_numeric(mv_arb['amount_net'], errors='coerce').fillna(0)
+                fig.add_trace(
+                    go.Scatter(
+                        x=mv_arb['date'],
+                        y=[y_evt - 0.12] * len(mv_arb),
+                        mode='markers',
+                        name='Arbitrages',
+                        marker=dict(symbol='diamond', size=9, color='#ff7f0e', line=dict(width=1, color='#c65f00')),
+                        customdata=mv_arb[['label', 'amount_net']],
+                        hovertemplate='<b>%{x|%d/%m/%Y}</b><br>%{customdata[0]}<br>Montant: %{customdata[1]:,.0f} €<extra></extra>',
+                    )
+                )
+
+    fig.add_hline(y=100, line_dash='dash', line_color='gray', annotation_text='Base 100', annotation_position='right')
+    fig.update_layout(
+        title=title,
+        xaxis_title='Date',
+        yaxis_title='Performance (base 100)',
+        hovermode='x unified',
+        height=height,
+    )
+    return fig
+
+
+def build_contract_and_class_fund_figures(
+    df_perfs: pd.DataFrame,
+    df_alloc_ctr: pd.DataFrame,
+    contrat_num: str,
+    date_debut,
+    date_fin,
+    tri_analysis: dict | None = None,
+    show_versements: bool = True,
+    show_arbitrages: bool = True,
+    mapping_path: Path | None = None,
+) -> dict[str, object]:
+    """Construit le graphique d'évolution de tous les fonds du contrat et ceux par classe d'actifs simplifiée."""
+    prep = prepare_contract_fund_perf_data(
+        df_perfs=df_perfs,
+        df_alloc_ctr=df_alloc_ctr,
+        date_debut=date_debut,
+        date_fin=date_fin,
+        mapping_path=mapping_path,
+    )
+    df_perf_ctr = prep["df_perf_ctr"]
+    if df_perf_ctr.empty:
+        return {
+            **prep,
+            "fig_all_funds": None,
+            "figures_by_class": [],
+        }
+
+    palette = px.colors.qualitative.T10
+    color_map = {
+        name: palette[i % len(palette)]
+        for i, name in enumerate(sorted(df_perf_ctr['Nom_fonds'].unique()))
+    }
+    start_str = pd.to_datetime(date_debut).strftime('%d/%m/%Y')
+    fig_all_funds = build_fund_evolution_figure(
+        df_perf_subset=df_perf_ctr,
+        title=f"Fonds du contrat {contrat_num} (base 100 au {start_str})",
+        tri_analysis=tri_analysis,
+        date_debut=date_debut,
+        date_fin=date_fin,
+        show_versements=show_versements,
+        show_arbitrages=show_arbitrages,
+        height=500,
+        color_map=color_map,
+    )
+
+    figures_by_class: list[tuple[str, go.Figure]] = []
+    for asset_class in prep["type_order"]:
+        df_cls = df_perf_ctr[df_perf_ctr['Type simplifié'] == asset_class]
+        if df_cls.empty:
+            continue
+        fig_cls = build_fund_evolution_figure(
+            df_perf_subset=df_cls,
+            title=f"Fonds {asset_class} — contrat {contrat_num} (base 100 au {start_str})",
+            tri_analysis=tri_analysis,
+            date_debut=date_debut,
+            date_fin=date_fin,
+            show_versements=show_versements,
+            show_arbitrages=show_arbitrages,
+            height=460,
+            color_map=color_map,
+        )
+        if fig_cls is not None:
+            figures_by_class.append((asset_class, fig_cls))
+
+    return {
+        **prep,
+        "fig_all_funds": fig_all_funds,
+        "figures_by_class": figures_by_class,
+    }

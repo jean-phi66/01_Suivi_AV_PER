@@ -36,6 +36,17 @@ def normalize_person_name(value: object) -> str:
     return " ".join(tokens)
 
 
+def pdf_dir_signature(pdf_dir: str | Path = DEFAULT_PDF_DIR) -> tuple:
+    """Signature (nom, date de modification, taille) des PDF du repertoire, utilisee comme cle de cache
+    afin que l'analyse soit recalculee automatiquement des qu'un releve est ajoute ou remplace."""
+    directory = Path(pdf_dir)
+    if not directory.exists():
+        return ()
+    return tuple(
+        sorted((p.name, p.stat().st_mtime_ns, p.stat().st_size) for p in directory.glob("*.pdf"))
+    )
+
+
 def load_tri_analyses(pdf_dir: str | Path = DEFAULT_PDF_DIR) -> list[dict[str, object]]:
     return analyze_directory(Path(pdf_dir))
 

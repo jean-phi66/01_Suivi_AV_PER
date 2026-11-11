@@ -14,6 +14,7 @@ BASE_EXPORTS_PATH = '/Users/jean-philippenavarro/Documents/10_CGP/20_Outils - Si
 # Chemins pour les données réelles
 REAL_DATA_CONTRATS_PATH = os.path.join(BASE_EXPORTS_PATH, '1_Selection_Actifs/')
 REAL_DATA_ALLOCATIONS_PATH = os.path.join(BASE_EXPORTS_PATH, '2_Situations_Detaillées/')
+REAL_DATA_FONDS_PATH = os.path.join(BASE_EXPORTS_PATH, '3_Fonds/')
 
 # Chemins pour les données de démo
 DEMO_DATA_CONTRATS_FILE = os.path.join(BASE_EXPORTS_PATH, 'DEMO_Export_selection_actifs.csv')

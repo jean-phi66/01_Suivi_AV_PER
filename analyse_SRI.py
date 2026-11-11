@@ -3,21 +3,50 @@ def generate_fig_SRI(df_allocations_client):
     import numpy as np
     import pandas as pd
 
-    df_allocations_client_SRI = df_allocations_client.groupby(
-        'SRI')['Encours en €'].sum().reset_index()
-    df_allocations_client_SRI['ratio SRI'] = df_allocations_client_SRI['Encours en €'] / \
-        df_allocations_client_SRI['Encours en €'].sum()
+    df = df_allocations_client.copy() if df_allocations_client is not None else pd.DataFrame()
+    if df.empty or 'Encours en €' not in df.columns:
+        empty_df = pd.DataFrame(columns=['SRI', 'Encours en €', 'ratio SRI'])
+        fig_empty = px.bar(title="Répartition SRI")
+        return [empty_df, fig_empty, fig_empty]
+
+    df['Encours en €'] = pd.to_numeric(df['Encours en €'], errors='coerce').fillna(0.0)
+
+    # Convertir le SRI en numérique (les chaînes comme 'Non disponible' deviennent NaN)
+    col_sri = 'SRI' if 'SRI' in df.columns else ('SRRI' if 'SRRI' in df.columns else None)
+    if col_sri:
+        df['SRI'] = pd.to_numeric(df[col_sri], errors='coerce')
+    else:
+        df['SRI'] = np.nan
+
+    # Ne conserver que les lignes ayant un SRI valide (entre 1 et 7) et un encours > 0
+    df_valid = df[df['SRI'].notna() & (df['SRI'] >= 1) & (df['SRI'] <= 7) & (df['Encours en €'] > 0)].copy()
+
+    if df_valid.empty:
+        empty_df = pd.DataFrame(columns=['SRI', 'Encours en €', 'ratio SRI'])
+        fig_dist_empty = px.bar(title="Répartition SRI (aucun support noté)")
+        fig_sri_empty = px.bar(title="SRI global du contrat (non disponible)")
+        return [empty_df, fig_dist_empty, fig_sri_empty]
+
+    df_valid['SRI'] = df_valid['SRI'].astype(int)
+    total_encours_sri = df_valid['Encours en €'].sum()
+
+    df_allocations_client_SRI = df_valid.groupby(
+        'SRI', as_index=False)['Encours en €'].sum()
+    df_allocations_client_SRI['ratio SRI'] = df_allocations_client_SRI['Encours en €'] / (
+        total_encours_sri if total_encours_sri > 0 else 1.0
+    )
 
     fig_distribution_SRI = px.bar(df_allocations_client_SRI, x='SRI', y='ratio SRI',
                                 text_auto='.0%')
     fig_distribution_SRI.update_layout(
         title="Répartition SRI",
-        xaxis_range=[.5, 7.5])
+        xaxis_range=[.5, 7.5],
+        xaxis=dict(tickmode='linear', tick0=1, dtick=1))
     fig_distribution_SRI.update_traces(width=0.5)
 
 
-    df_allocations_client_SRI_moyen = np.sum(
-        df_allocations_client_SRI['ratio SRI'] * df_allocations_client_SRI['SRI'])
+    df_allocations_client_SRI_moyen = float(np.sum(
+        df_allocations_client_SRI['ratio SRI'] * df_allocations_client_SRI['SRI']))
     print("SRI moyen contrat:", np.round(df_allocations_client_SRI_moyen, 2))
 
     df_allocations_client_SRI_moyen = pd.DataFrame(
