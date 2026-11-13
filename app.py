@@ -82,6 +82,12 @@ composition_page = st.Page(
     icon = '🩻'
 )
 
+projection_page = st.Page(
+    page = 'views/projection.py',
+    title = "Projection / Plan",
+    icon = '📈'
+)
+
 #arbitrage_page = st.Page(
 #    page = 'views/arbitrage.py',
 #    title = "Arbitrage",
@@ -162,7 +168,7 @@ if df_contrat_selected is not None and hasattr(df_contrat_selected, "empty") and
 
 nav_items = {
     "DONNEES": [data_ingestion_page, extranet_proxeema_page],
-    "CLIENT": [client_page, composition_page, perfo_page],
+    "CLIENT": [client_page, composition_page, perfo_page, projection_page],
     "OPERATIONS": [page for page in [fiche_per_page if show_arbitrage_per else None,
                                       fiche_av_page if show_arbitrage_av else None]
                     if page is not None],

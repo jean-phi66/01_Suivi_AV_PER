@@ -5,10 +5,14 @@ Module de génération de bilans de contrat au format PowerPoint (.pptx).
 from __future__ import annotations
 
 import io
+import json
 import os
+import re
 import stat
 import tempfile
-from typing import Any
+import zipfile
+from pathlib import Path
+from typing import Any, Callable
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -29,6 +33,7 @@ from reporting_helpers import (
     build_evolution_figure,
     build_kpi_overrides,
     load_latest_fund_perf_file,
+    prepare_portfolio_lines_table,
     resolve_payment_source,
 )
 from tri_integration import load_tri_analyses, match_tri_analyses_to_contracts
@@ -44,6 +49,15 @@ CARD_BORDER = RGBColor(0xD1, 0xD9, 0xE6)
 ZEBRA_BG = RGBColor(0xF8, 0xFA, 0xFC)
 TOTAL_ROW_BG = RGBColor(0xE6, 0xEE, 0xF8)
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+
+# Couleurs pour la mise en valeur des performances (vert/rouge sobre)
+GREEN_ROW_BG = RGBColor(0xF0, 0xF9, 0xF4)
+GREEN_CELL_BG = RGBColor(0xDC, 0xF2, 0xE4)
+GREEN_TEXT = RGBColor(0x13, 0x73, 0x33)
+
+RED_ROW_BG = RGBColor(0xFD, 0xF4, 0xF4)
+RED_CELL_BG = RGBColor(0xFD, 0xDE, 0xDC)
+RED_TEXT = RGBColor(0xC5, 0x22, 0x1F)
 
 SLIDE_WIDTH = Inches(13.333)
 SLIDE_HEIGHT = Inches(7.5)
@@ -97,6 +111,14 @@ def convert_figure_to_png_bytes(
 
     _ensure_kaleido_space_safe()
     fig_export = go.Figure(fig)
+    has_cartesian_axes = any(
+        getattr(tr, "type", "") not in ("pie", "sunburst", "treemap")
+        for tr in fig_export.data
+    )
+    visible_legend_items = sum(
+        1 for tr in fig_export.data if getattr(tr, "showlegend", True) is not False
+    )
+
     layout_updates: dict[str, Any] = {
         "paper_bgcolor": "white",
         "plot_bgcolor": "white",
@@ -104,16 +126,55 @@ def convert_figure_to_png_bytes(
         "width": width_px,
         "height": height_px,
     }
+    if has_cartesian_axes:
+        fig_export.update_xaxes(automargin=True, title_standoff=12)
+        fig_export.update_yaxes(automargin=True, title_standoff=14)
+
     if legend_bottom:
-        layout_updates["legend"] = {
-            "orientation": "h",
-            "yanchor": "top",
-            "y": -0.08,
-            "xanchor": "center",
-            "x": 0.5,
-            "font": {"size": 10},
+        if has_cartesian_axes:
+            est_rows = max(1, (visible_legend_items + 3) // 4)
+            bottom_margin = min(200, 95 + est_rows * 24)
+            layout_updates["legend"] = {
+                "orientation": "h",
+                "yanchor": "top",
+                "y": -0.18,
+                "xanchor": "center",
+                "x": 0.5,
+                "font": {"size": 10},
+            }
+            layout_updates["margin"] = {
+                "t": 60,
+                "b": bottom_margin,
+                "l": 85,
+                "r": 55,
+                "autoexpand": True,
+            }
+        else:
+            est_rows = max(1, (visible_legend_items + 2) // 3)
+            bottom_margin = min(190, 80 + est_rows * 22)
+            layout_updates["legend"] = {
+                "orientation": "h",
+                "yanchor": "top",
+                "y": -0.06,
+                "xanchor": "center",
+                "x": 0.5,
+                "font": {"size": 10},
+            }
+            layout_updates["margin"] = {
+                "t": 55,
+                "b": bottom_margin,
+                "l": 25,
+                "r": 25,
+                "autoexpand": True,
+            }
+    elif has_cartesian_axes:
+        layout_updates["margin"] = {
+            "t": 65,
+            "b": 85,
+            "l": 80,
+            "r": 35,
+            "autoexpand": True,
         }
-        layout_updates["margin"] = {"t": 60, "b": 110, "l": 20, "r": 20}
 
     fig_export.update_layout(**layout_updates)
     return fig_export.to_image(format="png", engine="kaleido", width=width_px, height=height_px, scale=scale)
@@ -343,6 +404,259 @@ def _add_cover_slide(
     p_fr.font.name = "Calibri"
     p_fr.font.size = Pt(9.5)
     p_fr.font.color.rgb = MUTED_TEXT
+
+
+def _load_mandataire_info() -> dict[str, str]:
+    """Charge les coordonnées du cabinet / mandataire depuis mandataire.json ou defaults/mandataire.json."""
+    base_dir = Path(__file__).resolve().parent
+    candidates = [
+        base_dir / "mandataire.json",
+        base_dir / "defaults" / "mandataire.json",
+        Path.cwd() / "mandataire.json",
+        Path.cwd() / "defaults" / "mandataire.json",
+    ]
+    for p in candidates:
+        try:
+            if p.is_file():
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        return {
+                            "nom": str(data.get("nom", "Navarro")).strip(),
+                            "prenom": str(data.get("prenom", "Jean-Philippe")).strip(),
+                            "raison_sociale": str(data.get("raison_sociale", "Avenir-Patrimoine")).strip(),
+                        }
+        except Exception:
+            pass
+    return {
+        "nom": "Navarro",
+        "prenom": "Jean-Philippe",
+        "raison_sociale": "Avenir-Patrimoine",
+    }
+
+
+def _add_back_cover_slide(
+    slide,
+    client_name: str,
+    contrat_num: str,
+    enveloppe: str,
+    partenaire: str,
+    valorisation_str: str,
+    date_val_str: str,
+    date_ouv_str: str,
+    slide_index: int,
+    total_slides: int,
+) -> None:
+    """Ajoute une slide de 4ème de couverture pour clôturer la présentation proprement."""
+    mandataire = _load_mandataire_info()
+    cgp_name = f"{mandataire.get('prenom', 'Jean-Philippe')} {mandataire.get('nom', 'Navarro').upper()}".strip()
+    cabinet = mandataire.get("raison_sociale", "Avenir-Patrimoine").strip()
+
+    # Liserés supérieurs corporate (fond blanc conservé sur toute la slide)
+    top_strip = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), SLIDE_WIDTH, Inches(0.10)
+    )
+    top_strip.fill.solid()
+    top_strip.fill.fore_color.rgb = NAVY
+    top_strip.line.fill.background()
+
+    sub_strip = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0), Inches(0.10), SLIDE_WIDTH, Inches(0.03)
+    )
+    sub_strip.fill.solid()
+    sub_strip.fill.fore_color.rgb = ACCENT_BLUE
+    sub_strip.line.fill.background()
+
+    # Liserés inférieurs corporate
+    sub_bottom = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0), Inches(7.37), SLIDE_WIDTH, Inches(0.03)
+    )
+    sub_bottom.fill.solid()
+    sub_bottom.fill.fore_color.rgb = ACCENT_BLUE
+    sub_bottom.line.fill.background()
+
+    bottom_strip = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0), Inches(7.40), SLIDE_WIDTH, Inches(0.10)
+    )
+    bottom_strip.fill.solid()
+    bottom_strip.fill.fore_color.rgb = NAVY
+    bottom_strip.line.fill.background()
+
+    # Badge de conclusion
+    badge = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.95), Inches(0.68), Inches(4.30), Inches(0.38)
+    )
+    badge.fill.solid()
+    badge.fill.fore_color.rgb = TOTAL_ROW_BG
+    badge.line.color.rgb = ACCENT_BLUE
+    badge.line.width = Pt(1)
+    tf_b = badge.text_frame
+    tf_b.word_wrap = True
+    tf_b.vertical_anchor = MSO_ANCHOR.MIDDLE
+    p_b = tf_b.paragraphs[0]
+    p_b.alignment = PP_ALIGN.CENTER
+    p_b.text = "SYNTHÈSE DU BILAN  •  CLÔTURE"
+    p_b.font.name = "Calibri"
+    p_b.font.size = Pt(10.5)
+    p_b.font.bold = True
+    p_b.font.color.rgb = NAVY
+
+    # Titre principal & sous-titre
+    title_box = slide.shapes.add_textbox(Inches(0.95), Inches(1.18), Inches(11.43), Inches(0.65))
+    p_t = title_box.text_frame.paragraphs[0]
+    p_t.text = "Merci pour votre confiance"
+    p_t.font.name = "Calibri"
+    p_t.font.size = Pt(34)
+    p_t.font.bold = True
+    p_t.font.color.rgb = NAVY
+
+    sub_box = slide.shapes.add_textbox(Inches(0.95), Inches(1.84), Inches(11.43), Inches(0.42))
+    p_s = sub_box.text_frame.paragraphs[0]
+    p_s.text = (
+        "Votre conseiller reste à votre entière disposition pour tout échange, bilan périodique "
+        "ou ajustement de votre stratégie d'investissement."
+    )
+    p_s.font.name = "Calibri"
+    p_s.font.size = Pt(13)
+    p_s.font.color.rgb = DARK_TEXT
+
+    # Ligne de séparation fine
+    sep = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0.95), Inches(2.36), Inches(11.43), Inches(0.02)
+    )
+    sep.fill.solid()
+    sep.fill.fore_color.rgb = CARD_BORDER
+    sep.line.fill.background()
+
+    # --- Carte Gauche : Cabinet & Mandataire ---
+    card_left = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.95), Inches(2.55), Inches(5.55), Inches(2.95)
+    )
+    card_left.fill.solid()
+    card_left.fill.fore_color.rgb = CARD_BG
+    card_left.line.color.rgb = CARD_BORDER
+    card_left.line.width = Pt(1)
+
+    tf_cl = card_left.text_frame
+    tf_cl.word_wrap = True
+    tf_cl.vertical_anchor = MSO_ANCHOR.MIDDLE
+    tf_cl.margin_left = Inches(0.40)
+    tf_cl.margin_right = Inches(0.40)
+    tf_cl.margin_top = Inches(0.25)
+    tf_cl.margin_bottom = Inches(0.25)
+
+    p0 = tf_cl.paragraphs[0]
+    p0.text = "VOTRE CABINET CONSEIL"
+    p0.font.name = "Calibri"
+    p0.font.size = Pt(9.5)
+    p0.font.bold = True
+    p0.font.color.rgb = ACCENT_BLUE
+
+    p1 = tf_cl.add_paragraph()
+    p1.text = cabinet
+    p1.font.name = "Calibri"
+    p1.font.size = Pt(21)
+    p1.font.bold = True
+    p1.font.color.rgb = NAVY
+
+    p2 = tf_cl.add_paragraph()
+    p2.text = cgp_name
+    p2.font.name = "Calibri"
+    p2.font.size = Pt(15)
+    p2.font.bold = True
+    p2.font.color.rgb = DARK_TEXT
+
+    p3 = tf_cl.add_paragraph()
+    p3.text = "Conseil en Gestion de Patrimoine"
+    p3.font.name = "Calibri"
+    p3.font.size = Pt(11.5)
+    p3.font.color.rgb = MUTED_TEXT
+
+    # --- Carte Droite : Références du Contrat ---
+    card_right = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(6.83), Inches(2.55), Inches(5.55), Inches(2.95)
+    )
+    card_right.fill.solid()
+    card_right.fill.fore_color.rgb = CARD_BG
+    card_right.line.color.rgb = CARD_BORDER
+    card_right.line.width = Pt(1)
+
+    tf_cr = card_right.text_frame
+    tf_cr.word_wrap = True
+    tf_cr.vertical_anchor = MSO_ANCHOR.MIDDLE
+    tf_cr.margin_left = Inches(0.40)
+    tf_cr.margin_right = Inches(0.40)
+    tf_cr.margin_top = Inches(0.25)
+    tf_cr.margin_bottom = Inches(0.25)
+
+    pr0 = tf_cr.paragraphs[0]
+    pr0.text = "RÉFÉRENCES DU DOSSIER"
+    pr0.font.name = "Calibri"
+    pr0.font.size = Pt(9.5)
+    pr0.font.bold = True
+    pr0.font.color.rgb = ACCENT_BLUE
+
+    pr1 = tf_cr.add_paragraph()
+    pr1.text = client_name
+    pr1.font.name = "Calibri"
+    pr1.font.size = Pt(19)
+    pr1.font.bold = True
+    pr1.font.color.rgb = NAVY
+
+    pr2 = tf_cr.add_paragraph()
+    pr2.text = f"{enveloppe}  •  N° {contrat_num}"
+    pr2.font.name = "Calibri"
+    pr2.font.size = Pt(13.5)
+    pr2.font.bold = True
+    pr2.font.color.rgb = DARK_TEXT
+
+    pr3 = tf_cr.add_paragraph()
+    pr3.text = f"Partenaire : {partenaire}"
+    pr3.font.name = "Calibri"
+    pr3.font.size = Pt(11.5)
+    pr3.font.color.rgb = DARK_TEXT
+
+    # --- Bloc avertissement / mentions légales ---
+    legal_box = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.95), Inches(5.75), Inches(11.43), Inches(0.85)
+    )
+    legal_box.fill.solid()
+    legal_box.fill.fore_color.rgb = WHITE
+    legal_box.line.color.rgb = CARD_BORDER
+    legal_box.line.width = Pt(1)
+
+    tf_l = legal_box.text_frame
+    tf_l.word_wrap = True
+    tf_l.margin_left = Inches(0.25)
+    tf_l.margin_right = Inches(0.25)
+    tf_l.margin_top = Inches(0.12)
+    tf_l.margin_bottom = Inches(0.10)
+    pl = tf_l.paragraphs[0]
+    pl.text = (
+        "Avertissement & Mentions réglementaires : Le présent bilan est un document de synthèse confidentiel "
+        "établi pour le titulaire désigné. Les performances passées ne préjugent pas des performances futures "
+        "et ne sont pas constantes dans le temps. Les investissements sur des supports en unités de compte comportent "
+        "un risque de perte en capital. Document non contractuel rédigé sur la base des données valorisées fournies par l'assureur."
+    )
+    pl.font.name = "Calibri"
+    pl.font.size = Pt(8.5)
+    pl.font.color.rgb = MUTED_TEXT
+
+    # Pied de page
+    foot_l = slide.shapes.add_textbox(Inches(0.95), Inches(6.98), Inches(8.0), Inches(0.28))
+    pfl = foot_l.text_frame.paragraphs[0]
+    pfl.text = f"{cabinet}  •  {cgp_name}  •  Bilan de contrat"
+    pfl.font.name = "Calibri"
+    pfl.font.size = Pt(9.5)
+    pfl.font.color.rgb = MUTED_TEXT
+
+    foot_r = slide.shapes.add_textbox(Inches(10.0), Inches(6.98), Inches(2.38), Inches(0.28))
+    pfr = foot_r.text_frame.paragraphs[0]
+    pfr.alignment = PP_ALIGN.RIGHT
+    pfr.text = f"Slide {slide_index} / {total_slides}"
+    pfr.font.name = "Calibri"
+    pfr.font.size = Pt(9.5)
+    pfr.font.color.rgb = MUTED_TEXT
 
 
 def _add_picture_fit(
@@ -720,6 +1034,7 @@ def _add_styled_table(
     rows: list[list[str]],
     total_row: list[str] | None = None,
     empty_message: str = "Aucune opération enregistrée.",
+    color_evolution: bool = False,
 ) -> None:
     """Insère un tableau PowerPoint stylé dans la zone cible."""
     if not rows:
@@ -745,9 +1060,12 @@ def _add_styled_table(
     elif len(rows) <= 14:
         font_pt = 8.5
         row_h_in = 0.255
-    else:
+    elif len(rows) <= 20:
         font_pt = 8.0
         row_h_in = min(0.225, max_height_in / max(n_rows, 1))
+    else:
+        font_pt = 7.5
+        row_h_in = min(0.20, max_height_in / max(n_rows, 1))
 
     header_h_in = min(0.32, max(0.24, row_h_in + 0.04))
     table_h_in = min(max_height_in, header_h_in + len(all_rows) * row_h_in)
@@ -788,13 +1106,104 @@ def _add_styled_table(
     for c_idx, h_text in enumerate(headers):
         _style_cell(table.cell(0, c_idx), h_text, col_alignments[c_idx], NAVY, WHITE, True, font_pt)
 
+    # Détecter la colonne d'évolution en % si color_evolution activé
+    evol_col_idx = -1
+    if color_evolution:
+        for c_idx, h in enumerate(headers):
+            h_clean = h.lower()
+            if "évol" in h_clean or "perf" in h_clean:
+                evol_col_idx = c_idx
+                break
+
     # Lignes de données + total
     for idx, row_vals in enumerate(all_rows):
         is_total = total_row is not None and idx == len(all_rows) - 1
-        bg = TOTAL_ROW_BG if is_total else (ZEBRA_BG if idx % 2 == 1 else WHITE)
-        fg = NAVY if is_total else DARK_TEXT
+        row_bg = TOTAL_ROW_BG if is_total else (ZEBRA_BG if idx % 2 == 1 else WHITE)
+        is_pos_fund = False
+        is_neg_fund = False
+
+        if color_evolution and not is_total and evol_col_idx >= 0 and evol_col_idx < len(row_vals):
+            evol_str = str(row_vals[evol_col_idx]).strip()
+            if evol_str.startswith("+") and not evol_str.startswith("+0.00") and not evol_str.startswith("+0,00"):
+                is_pos_fund = True
+                row_bg = GREEN_ROW_BG
+            elif evol_str.startswith("-") and not evol_str.startswith("-0.00") and not evol_str.startswith("-0,00"):
+                is_neg_fund = True
+                row_bg = RED_ROW_BG
+
         for c_idx, val in enumerate(row_vals):
-            _style_cell(table.cell(idx + 1, c_idx), str(val), col_alignments[c_idx], bg, fg, is_total, font_pt)
+            cell_bg = row_bg
+            cell_fg = NAVY if is_total else DARK_TEXT
+            cell_bold = is_total
+
+            if color_evolution and c_idx == evol_col_idx:
+                if is_total:
+                    tot_evol_str = str(val).strip()
+                    if tot_evol_str.startswith("+") and not tot_evol_str.startswith("+0"):
+                        cell_fg = GREEN_TEXT
+                    elif tot_evol_str.startswith("-") and not tot_evol_str.startswith("-0"):
+                        cell_fg = RED_TEXT
+                    cell_bold = True
+                elif is_pos_fund:
+                    cell_bg = GREEN_CELL_BG
+                    cell_fg = GREEN_TEXT
+                    cell_bold = True
+                elif is_neg_fund:
+                    cell_bg = RED_CELL_BG
+                    cell_fg = RED_TEXT
+                    cell_bold = True
+
+            _style_cell(table.cell(idx + 1, c_idx), str(val), col_alignments[c_idx], cell_bg, cell_fg, cell_bold, font_pt)
+
+
+def _add_portfolio_lines_slide(
+    slide,
+    df_allocations_client: pd.DataFrame | None,
+) -> None:
+    """Remplit la première slide de contenu avec le tableau détaillé des lignes du portefeuille groupé par type."""
+    df_display, rows, total_row, meta = prepare_portfolio_lines_table(df_allocations_client)
+    if df_display.empty or not rows:
+        _add_picture_fit(
+            slide,
+            None,
+            left_in=0.61,
+            top_in=1.35,
+            max_width_in=12.1,
+            max_height_in=3.0,
+            aspect_ratio=3.0,
+            empty_message="Aucune ligne de portefeuille disponible pour ce contrat.",
+        )
+        return
+
+    n_rows = len(rows)
+    kpis = [
+        ("Nombre de supports", f"{meta.get('n_supports', n_rows)} fonds"),
+        ("Classes d'actifs", f"{meta.get('n_types', 1)} typologies"),
+        ("Encours total", f"{meta.get('total_encours', 0.0):,.0f} €".replace(",", " ")),
+        ("Plus-value latente globale", f"{meta.get('total_pct', 0.0):+.2f} %"),
+    ]
+    _add_kpi_strip(slide, kpis, top_in=1.28)
+    tbl_top = 2.04
+    tbl_max_h = 4.88
+
+    headers = ["Type (simplifié)", "Nom du support", "Code ISIN", "Encours", "Évolution"]
+    col_widths = [2.4, 4.4, 1.8, 1.8, 1.7]
+    col_aligns = [PP_ALIGN.LEFT, PP_ALIGN.LEFT, PP_ALIGN.CENTER, PP_ALIGN.RIGHT, PP_ALIGN.RIGHT]
+
+    _add_styled_table(
+        slide,
+        left_in=0.61,
+        top_in=tbl_top,
+        width_in=12.1,
+        max_height_in=tbl_max_h,
+        headers=headers,
+        col_widths_in=col_widths,
+        col_alignments=col_aligns,
+        rows=rows,
+        total_row=total_row,
+        empty_message="Aucune ligne de portefeuille disponible.",
+        color_evolution=True,
+    )
 
 
 def _add_operations_slide(
@@ -963,6 +1372,9 @@ def build_contract_pptx_context(
     show_arbitrages: bool = True,
     fonds_dir: str | None = None,
     auto_extract_tri: bool = True,
+    df_perfs: pd.DataFrame | None = None,
+    latest_funds_file: str | None = None,
+    monthly_contribution: float | None = None,
 ) -> dict[str, Any]:
     """Prépare toutes les figures nécessaires au bilan PowerPoint à partir des helpers du GUI."""
     if auto_extract_tri:
@@ -985,7 +1397,7 @@ def build_contract_pptx_context(
     is_per = "PER" in enveloppe.upper()
 
     # 1. Donuts composition (GUI)
-    _, _, fig_typologie_simplifiee, fig_supports = build_composition_figures(df_allocations_client)
+    df_alloc_work, _, fig_typologie_simplifiee, fig_supports = build_composition_figures(df_allocations_client)
 
     # 2. Waterfall performance du contrat (IR 30% automatique si PER)
     fig_waterfall_contract = build_contract_waterfall_figure(
@@ -1005,7 +1417,8 @@ def build_contract_pptx_context(
     )
 
     # 4 & 5. Évolution des fonds (tous les fonds + par classe d'actifs simplifiée)
-    df_perfs, latest_funds_file = load_latest_fund_perf_file(fonds_dir)
+    if df_perfs is None:
+        df_perfs, latest_funds_file = load_latest_fund_perf_file(fonds_dir)
     fig_all_funds = None
     figures_by_class: list[tuple[str, go.Figure]] = []
     missing_funds_labels: list[str] = []
@@ -1053,11 +1466,111 @@ def build_contract_pptx_context(
         include_arbitrages=show_arbitrages,
     )
 
+    # 7. Projections de valorisation à 8 ans et 2 ans
+    fig_projection_8ans = None
+    fig_projection_2ans = None
+    try:
+        import datetime
+        from projection_helpers import (
+            calculate_contract_projection,
+            detect_initial_contribution,
+            detect_default_monthly_contribution,
+            build_projection_trajectory_figure,
+        )
+        init_info = detect_initial_contribution(df_contrat_selected, tri_analysis, df_hist_ctr)
+        vp_auto = detect_default_monthly_contribution(tri_analysis, df_contrat_selected)
+        eff_vp = float(monthly_contribution) if monthly_contribution is not None else float(vp_auto)
+        hist_movements = tri_analysis.get("movements") if (tri_analysis and isinstance(tri_analysis.get("movements"), pd.DataFrame)) else None
+
+        current_val = (
+            float(df_contrat_selected["Valorisation"].iloc[0])
+            if not df_contrat_selected.empty and "Valorisation" in df_contrat_selected.columns
+            else 0.0
+        )
+        date_val_raw = (
+            df_contrat_selected["Date de valorisation"].iloc[0]
+            if not df_contrat_selected.empty and "Date de valorisation" in df_contrat_selected.columns
+            else None
+        )
+        current_dt = pd.to_datetime(date_val_raw).date() if pd.notna(date_val_raw) else datetime.date.today()
+
+        scenarios_std = {
+            "Prudent": 0.025,
+            "Équilibré": 0.050,
+            "Dynamique": 0.060,
+        }
+
+        # Projection 8 ans
+        proj_8 = calculate_contract_projection(
+            current_valuation=current_val,
+            current_date=current_dt,
+            initial_amount=init_info["initial_amount_net"],
+            initial_amount_gross=init_info["initial_amount_gross"],
+            initial_date=init_info["initial_date"],
+            years=8,
+            monthly_contribution=eff_vp if eff_vp > 0 else 0.0,
+            annual_contribution=0.0,
+            contribution_fee_pct=0.0,
+            contract_fee_pct=1.0,
+            fund_fee_pct=0.0,
+            scenarios=scenarios_std,
+            is_per=is_per,
+            tmi_pct=30.0 if is_per else 0.0,
+            historical_movements=hist_movements,
+            future_anchor_mode="origin",
+        )
+        fig_projection_8ans = build_projection_trajectory_figure(
+            projection_data=proj_8,
+            historical_df=df_hist_ctr,
+            contrat_num=contrat_num,
+            client_name=client_name,
+            future_anchor_mode="origin",
+            filter_early_anomalies=True,
+            anomaly_min_ratio=0.95,
+            filter_transient_dips=True,
+            height=600,
+        )
+
+        # Projection 2 ans
+        proj_2 = calculate_contract_projection(
+            current_valuation=current_val,
+            current_date=current_dt,
+            initial_amount=init_info["initial_amount_net"],
+            initial_amount_gross=init_info["initial_amount_gross"],
+            initial_date=init_info["initial_date"],
+            years=2,
+            monthly_contribution=eff_vp if eff_vp > 0 else 0.0,
+            annual_contribution=0.0,
+            contribution_fee_pct=0.0,
+            contract_fee_pct=1.0,
+            fund_fee_pct=0.0,
+            scenarios=scenarios_std,
+            is_per=is_per,
+            tmi_pct=30.0 if is_per else 0.0,
+            historical_movements=hist_movements,
+            future_anchor_mode="origin",
+        )
+        fig_projection_2ans = build_projection_trajectory_figure(
+            projection_data=proj_2,
+            historical_df=df_hist_ctr,
+            contrat_num=contrat_num,
+            client_name=client_name,
+            future_anchor_mode="origin",
+            filter_early_anomalies=True,
+            anomaly_min_ratio=0.95,
+            filter_transient_dips=True,
+            height=600,
+        )
+    except Exception:
+        fig_projection_8ans = None
+        fig_projection_2ans = None
+
     return {
         "client_name": client_name,
         "contrat_num": contrat_num,
         "is_per": is_per,
         "tri_analysis": tri_analysis,
+        "df_allocations_client": df_alloc_work if df_alloc_work is not None and not df_alloc_work.empty else df_allocations_client,
         "df_versements": df_versements,
         "df_arbitrages": df_arbitrages,
         "ops_meta": ops_meta,
@@ -1070,6 +1583,8 @@ def build_contract_pptx_context(
         "fig_all_funds": fig_all_funds,
         "figures_by_class": figures_by_class,
         "fig_evol": fig_evol,
+        "fig_projection_8ans": fig_projection_8ans,
+        "fig_projection_2ans": fig_projection_2ans,
         "latest_funds_file": latest_funds_file,
         "missing_funds_labels": missing_funds_labels,
     }
@@ -1086,6 +1601,9 @@ def generate_contract_pptx(
     fig_all_funds: go.Figure | None,
     figures_by_class: list[tuple[str, go.Figure]],
     fig_evol: go.Figure | None,
+    fig_projection_8ans: go.Figure | None = None,
+    fig_projection_2ans: go.Figure | None = None,
+    df_allocations_client: pd.DataFrame | None = None,
     kpis: dict[str, Any] | None = None,
     is_per: bool = False,
     tri_analysis: dict | None = None,
@@ -1142,10 +1660,13 @@ def generate_contract_pptx(
     footer_left = f"Bilan de contrat — {client_name} — {enveloppe} N° {contrat_num}"
 
     # Nombre total de slides :
-    # 1 (Page de garde) + 1 (Composition) + 1 (WF contrat) + 1 (WF allocation)
-    # + 1 (Fonds global) + N (Fonds par classe d'actifs) + 1 (Versements & Arbitrages) + 1 (Évolution VL)
+    # 1 (Page de garde) + 1 (Lignes du portefeuille) + 1 (Composition) + 1 (Fonds global) + N (Fonds par classe d'actifs)
+    # + 1 (Évolution VL) + 1 (Projection 8 ans) + 1 (Projection 2 ans) + 1 (4ème de couverture)
+    # + 1 (WF contrat) + 1 (WF allocation) + 1 (Versements & Arbitrages)
     class_slides = figures_by_class or []
-    total_slides = 7 + len(class_slides)
+    has_proj_8 = 1 if fig_projection_8ans is not None else 0
+    has_proj_2 = 1 if fig_projection_2ans is not None else 0
+    total_slides = 9 + len(class_slides) + has_proj_8 + has_proj_2
     slide_idx = 1
 
     # --- Slide 1 : Page de garde (informations clés du contrat) ---
@@ -1163,23 +1684,29 @@ def generate_contract_pptx(
         total_slides=total_slides,
     )
 
-    def _new_slide(title: str):
+    def _new_slide(title: str, is_annex: bool = False):
         nonlocal slide_idx
         slide_idx += 1
         s = prs.slides.add_slide(blank_layout)
+        badge = f"ANNEXE TECHNIQUE  •  {contract_badge}" if is_annex else contract_badge
+        foot = f"Annexe — {footer_left}" if is_annex else footer_left
         _add_slide_chrome(
             slide=s,
             slide_title=title,
-            contract_badge=contract_badge,
+            contract_badge=badge,
             subtitle=subtitle,
-            footer_left=footer_left,
+            footer_left=foot,
             slide_index=slide_idx,
             total_slides=total_slides,
         )
         return s
 
-    # --- Slide 1 : Composition par classes d'actifs simplifiées et par fonds (donuts du GUI) ---
-    slide1 = _new_slide("Composition du portefeuille")
+    # --- Slide 2 : Détail des lignes du portefeuille groupé par type (simplifié) ---
+    slide_lines = _new_slide("Détail des lignes du portefeuille")
+    _add_portfolio_lines_slide(slide_lines, df_allocations_client)
+
+    # --- Slide 3 : Composition par classes d'actifs simplifiées et par fonds (donuts du GUI) ---
+    slide_comp = _new_slide("Composition du portefeuille")
     img_donut_typo = convert_figure_to_png_bytes(
         fig_typologie_simplifiee, width_px=720, height_px=600, scale=2, legend_bottom=True
     )
@@ -1187,7 +1714,7 @@ def generate_contract_pptx(
         fig_supports, width_px=720, height_px=600, scale=2, legend_bottom=True
     )
     _add_picture_fit(
-        slide1,
+        slide_comp,
         img_donut_typo,
         left_in=0.35,
         top_in=1.32,
@@ -1197,7 +1724,7 @@ def generate_contract_pptx(
         empty_message="Graphique des classes d'actifs simplifiées indisponible.",
     )
     _add_picture_fit(
-        slide1,
+        slide_comp,
         img_donut_supports,
         left_in=6.78,
         top_in=1.32,
@@ -1207,67 +1734,13 @@ def generate_contract_pptx(
         empty_message="Graphique de répartition par fonds indisponible.",
     )
 
-    # --- Slide 2 : Waterfall de la performance du contrat (avec IR 30% si PER) ---
-    wf_title = (
-        "Performance du contrat (avec réduction d'IR à 30 %)"
-        if is_per
-        else "Performance du contrat"
-    )
-    slide2 = _new_slide(wf_title)
-    if kpis:
-        kpi_cards = [
-            ("Valorisation", valorisation_str),
-            ("Versements bruts", str(kpis.get("montant_versements_bruts_str", "N/A"))),
-            ("Versements nets", str(kpis.get("montant_versements_nets_kpi_str", "N/A"))),
-            ("Perf. / Versements bruts", str(kpis.get("var_vs_brut_pct_str", "N/A"))),
-            ("TRI net / TRA", str(kpis.get("tri_net_str") if kpis.get("tri_net_str") not in (None, "N/A") else kpis.get("tra_str", "N/A"))),
-        ]
-        _add_kpi_strip(slide2, kpi_cards, top_in=1.28)
-        wf_top = 2.06
-        wf_max_h = 4.92
-        wf_h_px = 540
-    else:
-        wf_top = 1.32
-        wf_max_h = 5.65
-        wf_h_px = 620
-
-    img_wf_contract = convert_figure_to_png_bytes(
-        fig_waterfall_contract, width_px=1320, height_px=wf_h_px, scale=2
-    )
-    _add_picture_fit(
-        slide2,
-        img_wf_contract,
-        left_in=0.45,
-        top_in=wf_top,
-        max_width_in=12.43,
-        max_height_in=wf_max_h,
-        aspect_ratio=1320 / wf_h_px,
-        empty_message="Waterfall de performance du contrat indisponible.",
-    )
-
-    # --- Slide 3 : Waterfall de l'allocation ---
-    slide3 = _new_slide("Waterfall de l'allocation par support")
-    img_wf_alloc = convert_figure_to_png_bytes(
-        fig_waterfall_allocation, width_px=1320, height_px=620, scale=2
-    )
-    _add_picture_fit(
-        slide3,
-        img_wf_alloc,
-        left_in=0.45,
-        top_in=1.32,
-        max_width_in=12.43,
-        max_height_in=5.65,
-        aspect_ratio=1320 / 620,
-        empty_message="Waterfall de l'allocation indisponible (aucun support UC détecté).",
-    )
-
     # --- Slide 4 : Évolution dans le temps des fonds (reprend celui du GUI) ---
-    slide4 = _new_slide("Évolution dans le temps des fonds du contrat (base 100)")
+    slide_funds = _new_slide("Évolution dans le temps des fonds du contrat (base 100)")
     img_all_funds = convert_figure_to_png_bytes(
         fig_all_funds, width_px=1320, height_px=620, scale=2, legend_bottom=True
     )
     _add_picture_fit(
-        slide4,
+        slide_funds,
         img_all_funds,
         left_in=0.45,
         top_in=1.32,
@@ -1294,11 +1767,7 @@ def generate_contract_pptx(
             empty_message=f"Aucun historique disponible pour la classe {asset_class}.",
         )
 
-    # --- Slide avant-dernière : Tableaux détaillés des versements et arbitrages ---
-    slide_ops = _new_slide("Détail des versements et des arbitrages")
-    _add_operations_slide(slide_ops, tri_analysis=tri_analysis)
-
-    # --- Dernière Slide : Évolution temporelle de la VL du contrat avec versements et arbitrages ---
+    # --- Slide : Évolution temporelle de la VL du contrat avec versements et arbitrages ---
     slide_vl = _new_slide("Évolution de la VL du contrat (versements et arbitrages)")
     img_evol = convert_figure_to_png_bytes(
         fig_evol, width_px=1320, height_px=620, scale=2, legend_bottom=True
@@ -1314,7 +1783,342 @@ def generate_contract_pptx(
         empty_message="Historique de valorisation insuffisant pour tracer l'évolution temporelle de la VL.",
     )
 
+    # --- Slide : Plan de projection de la valorisation (Horizon 8 ans) ---
+    if fig_projection_8ans is not None:
+        slide_proj_8 = _new_slide("Plan de projection de la valorisation (Horizon 8 ans)")
+        img_proj_8 = convert_figure_to_png_bytes(
+            fig_projection_8ans, width_px=1320, height_px=620, scale=2, legend_bottom=True
+        )
+        _add_picture_fit(
+            slide_proj_8,
+            img_proj_8,
+            left_in=0.45,
+            top_in=1.32,
+            max_width_in=12.43,
+            max_height_in=5.65,
+            aspect_ratio=1320 / 620,
+            empty_message="Graphique de projection à 8 ans indisponible.",
+        )
+
+    # --- Slide : Plan de projection de la valorisation (Horizon 2 ans) ---
+    if fig_projection_2ans is not None:
+        slide_proj_2 = _new_slide("Plan de projection de la valorisation (Horizon 2 ans)")
+        img_proj_2 = convert_figure_to_png_bytes(
+            fig_projection_2ans, width_px=1320, height_px=620, scale=2, legend_bottom=True
+        )
+        _add_picture_fit(
+            slide_proj_2,
+            img_proj_2,
+            left_in=0.45,
+            top_in=1.32,
+            max_width_in=12.43,
+            max_height_in=5.65,
+            aspect_ratio=1320 / 620,
+            empty_message="Graphique de projection à 2 ans indisponible.",
+        )
+
+    # --- Slide : 4ème de couverture (Clôture de la présentation) ---
+    slide_idx += 1
+    back_cover_slide = prs.slides.add_slide(blank_layout)
+    _add_back_cover_slide(
+        slide=back_cover_slide,
+        client_name=client_name,
+        contrat_num=contrat_num,
+        enveloppe=enveloppe,
+        partenaire=partenaire,
+        valorisation_str=valorisation_str,
+        date_val_str=date_val_str,
+        date_ouv_str=date_ouv_str,
+        slide_index=slide_idx,
+        total_slides=total_slides,
+    )
+
+    # =========================================================================
+    # --- ANNEXES (placées après la 4ème de couverture) ---
+    # =========================================================================
+
+    # --- Annexe 1 : Waterfall de la performance du contrat (avec IR 30% si PER) ---
+    wf_title = (
+        "Annexe — Performance du contrat (avec réduction d'IR à 30 %)"
+        if is_per
+        else "Annexe — Performance globale du contrat"
+    )
+    slide_wf_c = _new_slide(wf_title, is_annex=True)
+    if kpis:
+        kpi_cards = [
+            ("Valorisation", valorisation_str),
+            ("Versements bruts", str(kpis.get("montant_versements_bruts_str", "N/A"))),
+            ("Versements nets", str(kpis.get("montant_versements_nets_kpi_str", "N/A"))),
+            ("Perf. / Versements bruts", str(kpis.get("var_vs_brut_pct_str", "N/A"))),
+            ("TRI net / TRA", str(kpis.get("tri_net_str") if kpis.get("tri_net_str") not in (None, "N/A") else kpis.get("tra_str", "N/A"))),
+        ]
+        _add_kpi_strip(slide_wf_c, kpi_cards, top_in=1.28)
+        wf_top = 2.06
+        wf_max_h = 4.92
+        wf_h_px = 540
+    else:
+        wf_top = 1.32
+        wf_max_h = 5.65
+        wf_h_px = 620
+
+    img_wf_contract = convert_figure_to_png_bytes(
+        fig_waterfall_contract, width_px=1320, height_px=wf_h_px, scale=2
+    )
+    _add_picture_fit(
+        slide_wf_c,
+        img_wf_contract,
+        left_in=0.45,
+        top_in=wf_top,
+        max_width_in=12.43,
+        max_height_in=wf_max_h,
+        aspect_ratio=1320 / wf_h_px,
+        empty_message="Waterfall de performance du contrat indisponible.",
+    )
+
+    # --- Annexe 2 : Waterfall de l'allocation ---
+    slide_wf_a = _new_slide("Annexe — Waterfall de l'allocation par support", is_annex=True)
+    img_wf_alloc = convert_figure_to_png_bytes(
+        fig_waterfall_allocation, width_px=1320, height_px=620, scale=2
+    )
+    _add_picture_fit(
+        slide_wf_a,
+        img_wf_alloc,
+        left_in=0.45,
+        top_in=1.32,
+        max_width_in=12.43,
+        max_height_in=5.65,
+        aspect_ratio=1320 / 620,
+        empty_message="Waterfall de l'allocation indisponible (aucun support UC détecté).",
+    )
+
+    # --- Annexe 3 : Tableaux détaillés des versements et arbitrages ---
+    slide_ops = _new_slide("Annexe — Détail des versements et des arbitrages", is_annex=True)
+    _add_operations_slide(slide_ops, tri_analysis=tri_analysis)
+
     output = io.BytesIO()
     prs.save(output)
     return output.getvalue()
+
+
+def sanitize_pptx_filename(value: str, fallback: str = "contrat") -> str:
+    """Nettoie un libellé pour construire un nom de fichier ou de dossier sûr."""
+    cleaned = re.sub(r'[\\/:*?"<>|]+', "_", str(value or "")).strip()
+    return cleaned or fallback
+
+
+def build_batch_pptx_targets(
+    selected_clients: list[str],
+    df_contrats: pd.DataFrame,
+) -> list[dict[str, Any]]:
+    """Liste tous les contrats associés aux clients sélectionnés pour l'export multi-PPT."""
+    if df_contrats is None or df_contrats.empty or not selected_clients:
+        return []
+
+    targets: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    titulaire_series = df_contrats["Titulaire(s)"].astype(str)
+
+    for client in selected_clients:
+        client_str = str(client)
+        df_cli = df_contrats[titulaire_series == client_str]
+        if df_cli.empty or "N° de contrat" not in df_cli.columns:
+            continue
+        for _, row in df_cli.iterrows():
+            contrat_val = row.get("N° de contrat")
+            if pd.isna(contrat_val):
+                continue
+            contrat_str = str(contrat_val).strip()
+            if not contrat_str or (client_str, contrat_str) in seen:
+                continue
+            seen.add((client_str, contrat_str))
+            enveloppe = str(row.get("Enveloppe", "N/A") or "N/A")
+            partenaire = str(row.get("Partenaire", "N/A") or "N/A")
+            val_num = pd.to_numeric(row.get("Valorisation", 0.0), errors="coerce")
+            valorisation = 0.0 if pd.isna(val_num) else float(val_num)
+            targets.append(
+                {
+                    "client_name": client_str,
+                    "contrat_num": contrat_str,
+                    "enveloppe": enveloppe,
+                    "partenaire": partenaire,
+                    "valorisation": valorisation,
+                    "is_per": "PER" in enveloppe.upper(),
+                }
+            )
+    return targets
+
+
+def _deduplicate_archive_path(path: str, used_paths: set[str]) -> str:
+    """Garantit l'unicité d'un chemin dans l'archive ZIP."""
+    if path not in used_paths:
+        used_paths.add(path)
+        return path
+    stem, ext = os.path.splitext(path)
+    counter = 2
+    candidate = f"{stem}_{counter}{ext}"
+    while candidate in used_paths:
+        counter += 1
+        candidate = f"{stem}_{counter}{ext}"
+    used_paths.add(candidate)
+    return candidate
+
+
+def generate_batch_contract_pptx(
+    selected_clients: list[str],
+    df_contrats_all: pd.DataFrame,
+    df_allocations_all: pd.DataFrame,
+    df_contrat_agg: pd.DataFrame | None = None,
+    tri_contracts_map: dict[str, dict] | None = None,
+    preferred_source: str = "Releve d'operations TRI",
+    date_debut=None,
+    date_fin=None,
+    show_versements: bool = True,
+    show_arbitrages: bool = True,
+    fonds_dir: str | None = None,
+    auto_extract_tri: bool = True,
+    group_by_client_folder: bool = False,
+    progress_callback: Callable[[int, int, dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    """Génère un .pptx par contrat pour chaque client sélectionné et assemble une archive ZIP."""
+    targets = build_batch_pptx_targets(selected_clients, df_contrats_all)
+    if not targets:
+        return {"items": [], "zip_bytes": None, "errors": []}
+
+    resolved_tri_map = tri_contracts_map
+    if resolved_tri_map is None and auto_extract_tri:
+        cols = [c for c in ["N° de contrat", "Titulaire(s)", "Enveloppe", "Partenaire"] if c in df_contrats_all.columns]
+        if "N° de contrat" in cols:
+            _, resolved_tri_map = match_tri_analyses_to_contracts(
+                load_tri_analyses(),
+                df_contrats_all[cols].drop_duplicates().copy(),
+            )
+        else:
+            resolved_tri_map = {}
+    elif resolved_tri_map is None:
+        resolved_tri_map = {}
+
+    df_perfs, latest_funds_file = load_latest_fund_perf_file(fonds_dir)
+
+    alloc_col = None
+    if df_allocations_all is not None and not df_allocations_all.empty:
+        if "Numéro contrat" in df_allocations_all.columns:
+            alloc_col = "Numéro contrat"
+        elif "Contrat" in df_allocations_all.columns:
+            alloc_col = "Contrat"
+
+    items: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    used_zip_paths: set[str] = set()
+    used_file_names: set[str] = set()
+    total = len(targets)
+
+    for idx, target in enumerate(targets, start=1):
+        client_name = target["client_name"]
+        contrat_num = target["contrat_num"]
+        if progress_callback is not None:
+            progress_callback(idx, total, target)
+
+        try:
+            df_contrat_sel = df_contrats_all[
+                (df_contrats_all["Titulaire(s)"].astype(str) == client_name)
+                & (df_contrats_all["N° de contrat"].astype(str) == contrat_num)
+            ].copy()
+            if df_contrat_sel.empty:
+                df_contrat_sel = df_contrats_all[df_contrats_all["N° de contrat"].astype(str) == contrat_num].copy()
+
+            if alloc_col:
+                df_alloc_cli = df_allocations_all[df_allocations_all[alloc_col].astype(str) == contrat_num].copy()
+            else:
+                df_alloc_cli = pd.DataFrame()
+
+            if df_contrat_sel.empty:
+                errors.append(
+                    {
+                        "client_name": client_name,
+                        "contrat_num": contrat_num,
+                        "error": "Ligne contrat introuvable.",
+                    }
+                )
+                continue
+
+            tri_analysis = resolved_tri_map.get(contrat_num)
+            ctx = build_contract_pptx_context(
+                client_name=client_name,
+                contrat_num=contrat_num,
+                df_contrats_all=df_contrats_all,
+                df_allocations_all=df_allocations_all,
+                df_contrat_selected=df_contrat_sel,
+                df_allocations_client=df_alloc_cli,
+                df_contrat_agg=df_contrat_agg,
+                tri_analysis=tri_analysis,
+                preferred_source=preferred_source,
+                date_debut=date_debut,
+                date_fin=date_fin,
+                show_versements=show_versements,
+                show_arbitrages=show_arbitrages,
+                fonds_dir=fonds_dir,
+                auto_extract_tri=False,
+                df_perfs=df_perfs,
+                latest_funds_file=latest_funds_file,
+            )
+
+            pptx_bytes = generate_contract_pptx(
+                client_name=client_name,
+                contrat_num=contrat_num,
+                df_contrat_sel=df_contrat_sel,
+                fig_typologie_simplifiee=ctx["fig_typologie_simplifiee"],
+                fig_supports=ctx["fig_supports"],
+                fig_waterfall_contract=ctx["fig_waterfall_contract"],
+                fig_waterfall_allocation=ctx["fig_waterfall_allocation"],
+                fig_all_funds=ctx["fig_all_funds"],
+                figures_by_class=ctx["figures_by_class"],
+                fig_evol=ctx["fig_evol"],
+                fig_projection_8ans=ctx.get("fig_projection_8ans"),
+                fig_projection_2ans=ctx.get("fig_projection_2ans"),
+                df_allocations_client=ctx.get("df_allocations_client"),
+                kpis=ctx["kpis"],
+                is_per=ctx["is_per"],
+                tri_analysis=ctx["tri_analysis"],
+                auto_extract_tri=False,
+            )
+
+            safe_client = sanitize_pptx_filename(client_name, "client")
+            safe_contrat = sanitize_pptx_filename(contrat_num, "contrat")
+            base_name = f"{safe_client} - {safe_contrat} - Bilan.pptx"
+            unique_file_name = _deduplicate_archive_path(base_name, used_file_names)
+            raw_archive_path = f"{safe_client}/{unique_file_name}" if group_by_client_folder else unique_file_name
+            archive_path = _deduplicate_archive_path(raw_archive_path, used_zip_paths)
+
+            has_proj = (1 if ctx.get("fig_projection_8ans") else 0) + (1 if ctx.get("fig_projection_2ans") else 0)
+            items.append(
+                {
+                    "client_name": client_name,
+                    "contrat_num": contrat_num,
+                    "enveloppe": target["enveloppe"],
+                    "is_per": ctx["is_per"],
+                    "slides_count": 9 + len(ctx["figures_by_class"]) + has_proj,
+                    "file_name": unique_file_name,
+                    "archive_path": archive_path,
+                    "data": pptx_bytes,
+                }
+            )
+        except Exception as exc:
+            errors.append(
+                {
+                    "client_name": client_name,
+                    "contrat_num": contrat_num,
+                    "error": str(exc),
+                }
+            )
+
+    zip_bytes: bytes | None = None
+    if items:
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for item in items:
+                zf.writestr(item["archive_path"], item["data"])
+        zip_bytes = zip_buf.getvalue()
+
+    return {"items": items, "zip_bytes": zip_bytes, "errors": errors}
+
 

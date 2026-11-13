@@ -3,6 +3,7 @@ from __future__ import annotations
 import glob
 import os
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import plotly.express as px
@@ -54,8 +55,16 @@ def apply_readable_yaxis(
 
 
 def resolve_payment_source(df_contrat_selected: pd.DataFrame, tri_analysis: dict | None, preferred_source: str) -> dict[str, object]:
-    gross_csv = float(df_contrat_selected['Montant total des versements bruts'].iloc[0]) if 'Montant total des versements bruts' in df_contrat_selected.columns else 0.0
-    net_csv = float(df_contrat_selected['Montant total des versements nets'].iloc[0]) if 'Montant total des versements nets' in df_contrat_selected.columns else 0.0
+    def _safe_float(val, default=0.0):
+        try:
+            if val is None or pd.isna(val):
+                return default
+            return float(str(val).replace(' ', '').replace(',', '.'))
+        except (ValueError, TypeError):
+            return default
+
+    gross_csv = _safe_float(df_contrat_selected['Montant total des versements bruts'].iloc[0]) if ('Montant total des versements bruts' in df_contrat_selected.columns and not df_contrat_selected.empty) else 0.0
+    net_csv = _safe_float(df_contrat_selected['Montant total des versements nets'].iloc[0]) if ('Montant total des versements nets' in df_contrat_selected.columns and not df_contrat_selected.empty) else 0.0
 
     gross_pdf = None
     net_pdf = None
@@ -541,6 +550,149 @@ def build_composition_figures(
     return df_alloc_work, fig_typologie, fig_typologie_simplifiee, fig_supports
 
 
+def prepare_portfolio_lines_table(
+    df_allocations_client: pd.DataFrame,
+    mapping_path: Path | None = None,
+) -> tuple[pd.DataFrame, list[list[str]], list[str] | None, dict[str, Any]]:
+    """Prépare le tableau des lignes du portefeuille groupé par type simplifié.
+
+    Retourne :
+      - df_display : DataFrame nettoyé et trié avec colonnes :
+          ['Type (simplifié)', 'Nom du support', 'Code ISIN', 'Encours (€)', 'Évolution (%)']
+      - rows : liste des lignes formatées en string pour l'export PPTX
+      - total_row : ligne de total formatée [Type, Nom, ISIN, Encours, Évolution]
+      - meta : dictionnaire avec kpis (total_encours, total_pct, n_supports, n_types)
+    """
+    if df_allocations_client is None or df_allocations_client.empty:
+        empty_df = pd.DataFrame(
+            columns=["Type (simplifié)", "Nom du support", "Code ISIN", "Encours (€)", "Évolution (%)"]
+        )
+        return empty_df, [], None, {"total_encours": 0.0, "total_pct": 0.0, "n_supports": 0, "n_types": 0}
+
+    cfg_path = mapping_path or DEFAULT_MAPPING_PATH
+    mapping_simplifie, support_rules = load_typage_config(cfg_path)
+    work = df_allocations_client.copy()
+
+    # Nettoyage Encours
+    enc_col = "Encours en €" if "Encours en €" in work.columns else "Encours"
+    if enc_col in work.columns:
+        work["encours_clean"] = pd.to_numeric(
+            work[enc_col].astype(str).str.replace(" ", "").str.replace(",", "."),
+            errors="coerce",
+        ).fillna(0.0)
+    else:
+        work["encours_clean"] = 0.0
+
+    # Type simplifié
+    if "Type simplifié" not in work.columns:
+        work["Type simplifié"] = work.apply(
+            lambda row: map_simplified_type(row.get("Type"), row.get("Support"), mapping_simplifie, support_rules),
+            axis=1,
+        )
+    work["type_clean"] = work["Type simplifié"].fillna("Autre").astype(str).str.strip()
+    work.loc[work["type_clean"] == "", "type_clean"] = "Autre"
+
+    # Nom du support
+    nom_col = "Support" if "Support" in work.columns else "Nom"
+    if nom_col in work.columns:
+        work["nom_clean"] = work[nom_col].fillna("").astype(str).str.strip()
+    else:
+        work["nom_clean"] = ""
+
+    # Code ISIN
+    isin_col = "Code ISIN" if "Code ISIN" in work.columns else "ISIN"
+    if isin_col in work.columns:
+        work["isin_clean"] = work[isin_col].fillna("-").astype(str).str.strip()
+    else:
+        work["isin_clean"] = "-"
+    work.loc[work["isin_clean"].isin(["", "nan", "None", "<NA>"]), "isin_clean"] = "-"
+
+    # Évolution en %
+    pct_col = None
+    for c in ["+/- value (en %))", "+/- value (en %)", "Evolution %", "Performance %"]:
+        if c in work.columns:
+            pct_col = c
+            break
+    if pct_col:
+        work["pct_clean"] = pd.to_numeric(
+            work[pct_col].astype(str).str.replace(" ", "").str.replace(",", ".").str.replace("%", ""),
+            errors="coerce",
+        ).fillna(0.0)
+    else:
+        work["pct_clean"] = 0.0
+
+    # Plus / Moins-value en €
+    pv_col = "+/- value (en €)" if "+/- value (en €)" in work.columns else None
+    if pv_col:
+        work["pv_eur_clean"] = pd.to_numeric(
+            work[pv_col].astype(str).str.replace(" ", "").str.replace(",", "."),
+            errors="coerce",
+        ).fillna(0.0)
+    else:
+        work["pv_eur_clean"] = 0.0
+
+    # Groupement : on ordonne les catégories par leur encours total décroissant,
+    # puis à l'intérieur de chaque catégorie par encours décroissant
+    type_totals = work.groupby("type_clean")["encours_clean"].sum().to_dict()
+    work["type_total"] = work["type_clean"].map(type_totals)
+    work = work.sort_values(
+        by=["type_total", "type_clean", "encours_clean"],
+        ascending=[False, True, False],
+    ).reset_index(drop=True)
+
+    df_display = pd.DataFrame(
+        {
+            "Type (simplifié)": work["type_clean"],
+            "Nom du support": work["nom_clean"],
+            "Code ISIN": work["isin_clean"],
+            "Encours (€)": work["encours_clean"],
+            "Évolution (%)": work["pct_clean"],
+        }
+    )
+
+    total_encours = float(work["encours_clean"].sum())
+    total_pv = float(work["pv_eur_clean"].sum())
+    total_investi = total_encours - total_pv
+
+    if total_pv != 0.0 and total_investi > 0:
+        total_pct = (total_pv / total_investi) * 100.0
+    elif total_encours > 0:
+        total_pct = float((work["encours_clean"] * work["pct_clean"]).sum() / total_encours)
+    else:
+        total_pct = 0.0
+
+    n_supports = len(df_display)
+    n_types = int(work["type_clean"].nunique())
+
+    rows = [
+        [
+            str(r["Type (simplifié)"]),
+            str(r["Nom du support"]),
+            str(r["Code ISIN"]),
+            f"{float(r['Encours (€)']):,.0f} €".replace(",", " "),
+            f"{float(r['Évolution (%)']):+.2f} %",
+        ]
+        for _, r in df_display.iterrows()
+    ]
+
+    total_row = [
+        "Total",
+        f"{n_supports} supports",
+        "-",
+        f"{total_encours:,.0f} €".replace(",", " "),
+        f"{total_pct:+.2f} %",
+    ]
+
+    meta = {
+        "total_encours": total_encours,
+        "total_pct": total_pct,
+        "n_supports": n_supports,
+        "n_types": n_types,
+    }
+
+    return df_display, rows, total_row, meta
+
+
 def build_contract_waterfall_figure(
     df_contrats_all: pd.DataFrame,
     df_allocations_all: pd.DataFrame,
@@ -581,6 +733,23 @@ def build_contract_waterfall_figure(
         left_on='N° de contrat',
         right_on='Numéro contrat',
     )
+    for c in [
+        'Montant total des versements bruts',
+        'Montant total des versements nets',
+        'Valorisation',
+        'Performance financière en euros (perf du contrat)',
+    ]:
+        if c in df_contrats_upd.columns:
+            cleaned_s = (
+                df_contrats_upd[c]
+                .astype(str)
+                .str.replace('\u202f', '', regex=False)
+                .str.replace('\xa0', '', regex=False)
+                .str.replace(' ', '', regex=False)
+                .str.replace(',', '.', regex=False)
+            )
+            df_contrats_upd[c] = pd.to_numeric(cleaned_s, errors='coerce').fillna(0.0)
+
     df_contrats_upd['+/- value (en €)'] = pd.to_numeric(
         df_contrats_upd['+/- value (en €)'], errors='coerce'
     ).fillna(0.0)
@@ -588,6 +757,18 @@ def build_contract_waterfall_figure(
         df_contrats_upd['Performance financière en euros (perf du contrat)'] - df_contrats_upd['+/- value (en €)']
     )
     df_contrats_upd.rename(columns={'+/- value (en €)': 'Performance allocation'}, inplace=True)
+
+    if 'Frais' not in df_contrats_upd.columns:
+        if (
+            'Montant total des versements bruts' in df_contrats_upd.columns
+            and 'Montant total des versements nets' in df_contrats_upd.columns
+        ):
+            df_contrats_upd['Frais'] = -(
+                pd.to_numeric(df_contrats_upd['Montant total des versements bruts'], errors='coerce').fillna(0.0)
+                - pd.to_numeric(df_contrats_upd['Montant total des versements nets'], errors='coerce').fillna(0.0)
+            )
+        else:
+            df_contrats_upd['Frais'] = 0.0
 
     if (
         source_context.get('source_effective') == "Releve d'operations TRI"
@@ -651,6 +832,17 @@ def build_allocation_waterfall_figure(
     df_allocations_waterfall = generate_allocations_waterfall(df_allocations_all.copy(), contrat_num)
     if df_allocations_waterfall.empty:
         return None
+
+    if '+/- value (en €)' in df_allocations_waterfall.columns:
+        s_val = (
+            df_allocations_waterfall['+/- value (en €)']
+            .astype(str)
+            .str.replace('\u202f', '', regex=False)
+            .str.replace('\xa0', '', regex=False)
+            .str.replace(' ', '', regex=False)
+            .str.replace(',', '.', regex=False)
+        )
+        df_allocations_waterfall['+/- value (en €)'] = pd.to_numeric(s_val, errors='coerce').fillna(0.0)
 
     fig = go.Figure(
         go.Waterfall(
@@ -894,7 +1086,7 @@ def build_fund_evolution_figure(
                     )
                 )
 
-    fig.add_hline(y=100, line_dash='dash', line_color='gray', annotation_text='Base 100', annotation_position='right')
+    fig.add_hline(y=100, line_dash='dash', line_color='gray', annotation_text='Base 100', annotation_position='top right')
     fig.update_layout(
         title=title,
         xaxis_title='Date',
