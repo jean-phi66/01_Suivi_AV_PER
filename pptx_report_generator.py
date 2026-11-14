@@ -406,6 +406,129 @@ def _add_cover_slide(
     p_fr.font.color.rgb = MUTED_TEXT
 
 
+def _add_section_separator_slide(
+    slide,
+    title: str = "Annexes",
+    subtitle: str = "Analyses complémentaires, historique des fonds et flux financiers détaillés",
+    contract_badge: str = "",
+    client_name: str = "",
+    slide_index: int = 1,
+    total_slides: int = 1,
+) -> None:
+    """Ajoute une slide séparatrice de section sobre et élégante marquant le début des annexes."""
+    # Liserés supérieurs corporate
+    top_strip = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), SLIDE_WIDTH, Inches(0.10)
+    )
+    top_strip.fill.solid()
+    top_strip.fill.fore_color.rgb = NAVY
+    top_strip.line.fill.background()
+
+    sub_strip = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0), Inches(0.10), SLIDE_WIDTH, Inches(0.03)
+    )
+    sub_strip.fill.solid()
+    sub_strip.fill.fore_color.rgb = ACCENT_BLUE
+    sub_strip.line.fill.background()
+
+    # Liserés inférieurs corporate
+    sub_bottom = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0), Inches(7.37), SLIDE_WIDTH, Inches(0.03)
+    )
+    sub_bottom.fill.solid()
+    sub_bottom.fill.fore_color.rgb = ACCENT_BLUE
+    sub_bottom.line.fill.background()
+
+    bottom_strip = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0), Inches(7.40), SLIDE_WIDTH, Inches(0.10)
+    )
+    bottom_strip.fill.solid()
+    bottom_strip.fill.fore_color.rgb = NAVY
+    bottom_strip.line.fill.background()
+
+    # Badge de section
+    badge = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(4.66), Inches(2.00), Inches(4.00), Inches(0.40)
+    )
+    badge.fill.solid()
+    badge.fill.fore_color.rgb = TOTAL_ROW_BG
+    badge.line.color.rgb = ACCENT_BLUE
+    badge.line.width = Pt(1)
+    tf_b = badge.text_frame
+    tf_b.word_wrap = True
+    tf_b.vertical_anchor = MSO_ANCHOR.MIDDLE
+    p_b = tf_b.paragraphs[0]
+    p_b.alignment = PP_ALIGN.CENTER
+    p_b.text = "SECTION COMPLÉMENTAIRE"
+    p_b.font.name = "Calibri"
+    p_b.font.size = Pt(10.5)
+    p_b.font.bold = True
+    p_b.font.color.rgb = NAVY
+
+    # Grand Titre centré
+    title_box = slide.shapes.add_textbox(Inches(1.0), Inches(2.65), Inches(11.333), Inches(1.10))
+    p_t = title_box.text_frame.paragraphs[0]
+    p_t.alignment = PP_ALIGN.CENTER
+    p_t.text = title
+    p_t.font.name = "Calibri"
+    p_t.font.size = Pt(48)
+    p_t.font.bold = True
+    p_t.font.color.rgb = NAVY
+
+    # Ligne de séparation élégante centrée
+    sep = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(5.166), Inches(3.90), Inches(3.00), Inches(0.04)
+    )
+    sep.fill.solid()
+    sep.fill.fore_color.rgb = ACCENT_BLUE
+    sep.line.fill.background()
+
+    # Sous-titre descriptif centré
+    sub_box = slide.shapes.add_textbox(Inches(1.5), Inches(4.15), Inches(10.333), Inches(0.65))
+    p_s = sub_box.text_frame.paragraphs[0]
+    p_s.alignment = PP_ALIGN.CENTER
+    p_s.text = subtitle
+    p_s.font.name = "Calibri"
+    p_s.font.size = Pt(13.5)
+    p_s.font.color.rgb = DARK_TEXT
+
+    # Cartouche rappel de dossier en bas
+    if contract_badge or client_name:
+        recap_box = slide.shapes.add_shape(
+            MSO_SHAPE.ROUNDED_RECTANGLE, Inches(3.166), Inches(5.10), Inches(7.00), Inches(0.50)
+        )
+        recap_box.fill.solid()
+        recap_box.fill.fore_color.rgb = CARD_BG
+        recap_box.line.color.rgb = CARD_BORDER
+        recap_box.line.width = Pt(1)
+        tf_r = recap_box.text_frame
+        tf_r.word_wrap = True
+        tf_r.vertical_anchor = MSO_ANCHOR.MIDDLE
+        p_r = tf_r.paragraphs[0]
+        p_r.alignment = PP_ALIGN.CENTER
+        badge_txt = f"{contract_badge}   •   Titulaire : {client_name}" if contract_badge and client_name else (contract_badge or client_name)
+        p_r.text = badge_txt
+        p_r.font.name = "Calibri"
+        p_r.font.size = Pt(10)
+        p_r.font.color.rgb = MUTED_TEXT
+
+    # Pied de page
+    foot_l = slide.shapes.add_textbox(Inches(0.95), Inches(6.98), Inches(8.0), Inches(0.28))
+    pfl = foot_l.text_frame.paragraphs[0]
+    pfl.text = f"Bilan de contrat — {client_name}"
+    pfl.font.name = "Calibri"
+    pfl.font.size = Pt(9.5)
+    pfl.font.color.rgb = MUTED_TEXT
+
+    foot_r = slide.shapes.add_textbox(Inches(10.0), Inches(6.98), Inches(2.38), Inches(0.28))
+    pfr = foot_r.text_frame.paragraphs[0]
+    pfr.alignment = PP_ALIGN.RIGHT
+    pfr.text = f"Slide {slide_index} / {total_slides}"
+    pfr.font.name = "Calibri"
+    pfr.font.size = Pt(9.5)
+    pfr.font.color.rgb = MUTED_TEXT
+
+
 def _load_mandataire_info() -> dict[str, str]:
     """Charge les coordonnées du cabinet / mandataire depuis mandataire.json ou defaults/mandataire.json."""
     base_dir = Path(__file__).resolve().parent
@@ -1659,14 +1782,18 @@ def generate_contract_pptx(
     )
     footer_left = f"Bilan de contrat — {client_name} — {enveloppe} N° {contrat_num}"
 
-    # Nombre total de slides :
-    # 1 (Page de garde) + 1 (Lignes du portefeuille) + 1 (Composition) + 1 (Fonds global) + N (Fonds par classe d'actifs)
-    # + 1 (Évolution VL) + 1 (Projection 8 ans) + 1 (Projection 2 ans) + 1 (4ème de couverture)
-    # + 1 (WF contrat) + 1 (WF allocation) + 1 (Versements & Arbitrages)
+    # Nombre total de slides (version standard par défaut) :
+    # Corps principal du rapport :
+    # 1 (Page de garde) + 1 (Composition donuts) + 1 (Détail des lignes) + 1 (Évolution VL) + [has_proj_2]
+    # Séparateur :
+    # + 1 (Séparateur "Annexes")
+    # Partie Annexes :
+    # + 1 (Fonds global) + N (Fonds par catégorie d'actifs) + [has_proj_8] + 1 (Détail flux & arbitrages)
+    # + 1 (Waterfall contrat) + 1 (Waterfall allocation) + 1 (4ème de couverture)
     class_slides = figures_by_class or []
     has_proj_8 = 1 if fig_projection_8ans is not None else 0
     has_proj_2 = 1 if fig_projection_2ans is not None else 0
-    total_slides = 9 + len(class_slides) + has_proj_8 + has_proj_2
+    total_slides = 10 + len(class_slides) + has_proj_8 + has_proj_2
     slide_idx = 1
 
     # --- Slide 1 : Page de garde (informations clés du contrat) ---
@@ -1701,11 +1828,11 @@ def generate_contract_pptx(
         )
         return s
 
-    # --- Slide 2 : Détail des lignes du portefeuille groupé par type (simplifié) ---
-    slide_lines = _new_slide("Détail des lignes du portefeuille")
-    _add_portfolio_lines_slide(slide_lines, df_allocations_client)
+    # =========================================================================
+    # --- CORPS DU RAPPORT ---
+    # =========================================================================
 
-    # --- Slide 3 : Composition par classes d'actifs simplifiées et par fonds (donuts du GUI) ---
+    # --- Slide 2 : Composition par classes d'actifs simplifiées et par fonds (donuts du GUI) ---
     slide_comp = _new_slide("Composition du portefeuille")
     img_donut_typo = convert_figure_to_png_bytes(
         fig_typologie_simplifiee, width_px=720, height_px=600, scale=2, legend_bottom=True
@@ -1734,40 +1861,11 @@ def generate_contract_pptx(
         empty_message="Graphique de répartition par fonds indisponible.",
     )
 
-    # --- Slide 4 : Évolution dans le temps des fonds (reprend celui du GUI) ---
-    slide_funds = _new_slide("Évolution dans le temps des fonds du contrat (base 100)")
-    img_all_funds = convert_figure_to_png_bytes(
-        fig_all_funds, width_px=1320, height_px=620, scale=2, legend_bottom=True
-    )
-    _add_picture_fit(
-        slide_funds,
-        img_all_funds,
-        left_in=0.45,
-        top_in=1.32,
-        max_width_in=12.43,
-        max_height_in=5.65,
-        aspect_ratio=1320 / 620,
-        empty_message="Aucun historique de performance disponible pour les fonds de ce contrat.",
-    )
+    # --- Slide 3 : Détail des lignes du portefeuille groupé par type (simplifié) ---
+    slide_lines = _new_slide("Détail des lignes du portefeuille")
+    _add_portfolio_lines_slide(slide_lines, df_allocations_client)
 
-    # --- Slides 5..K : Même graphe pour les fonds de chaque classe d'actifs simplifiée ---
-    for asset_class, fig_cls in class_slides:
-        slide_cls = _new_slide(f"Évolution des fonds — {asset_class} (base 100)")
-        img_cls = convert_figure_to_png_bytes(
-            fig_cls, width_px=1320, height_px=620, scale=2, legend_bottom=True
-        )
-        _add_picture_fit(
-            slide_cls,
-            img_cls,
-            left_in=0.45,
-            top_in=1.32,
-            max_width_in=12.43,
-            max_height_in=5.65,
-            aspect_ratio=1320 / 620,
-            empty_message=f"Aucun historique disponible pour la classe {asset_class}.",
-        )
-
-    # --- Slide : Évolution temporelle de la VL du contrat avec versements et arbitrages ---
+    # --- Slide 4 : Évolution temporelle de la VL du contrat avec versements et arbitrages ---
     slide_vl = _new_slide("Évolution de la VL du contrat (versements et arbitrages)")
     img_evol = convert_figure_to_png_bytes(
         fig_evol, width_px=1320, height_px=620, scale=2, legend_bottom=True
@@ -1783,24 +1881,7 @@ def generate_contract_pptx(
         empty_message="Historique de valorisation insuffisant pour tracer l'évolution temporelle de la VL.",
     )
 
-    # --- Slide : Plan de projection de la valorisation (Horizon 8 ans) ---
-    if fig_projection_8ans is not None:
-        slide_proj_8 = _new_slide("Plan de projection de la valorisation (Horizon 8 ans)")
-        img_proj_8 = convert_figure_to_png_bytes(
-            fig_projection_8ans, width_px=1320, height_px=620, scale=2, legend_bottom=True
-        )
-        _add_picture_fit(
-            slide_proj_8,
-            img_proj_8,
-            left_in=0.45,
-            top_in=1.32,
-            max_width_in=12.43,
-            max_height_in=5.65,
-            aspect_ratio=1320 / 620,
-            empty_message="Graphique de projection à 8 ans indisponible.",
-        )
-
-    # --- Slide : Plan de projection de la valorisation (Horizon 2 ans) ---
+    # --- Slide 5 : Plan de projection de la valorisation (Horizon 2 ans) ---
     if fig_projection_2ans is not None:
         slide_proj_2 = _new_slide("Plan de projection de la valorisation (Horizon 2 ans)")
         img_proj_2 = convert_figure_to_png_bytes(
@@ -1817,27 +1898,81 @@ def generate_contract_pptx(
             empty_message="Graphique de projection à 2 ans indisponible.",
         )
 
-    # --- Slide : 4ème de couverture (Clôture de la présentation) ---
+    # =========================================================================
+    # --- SÉPARATEUR ANNEXES ---
+    # =========================================================================
+
     slide_idx += 1
-    back_cover_slide = prs.slides.add_slide(blank_layout)
-    _add_back_cover_slide(
-        slide=back_cover_slide,
+    separator_slide = prs.slides.add_slide(blank_layout)
+    _add_section_separator_slide(
+        slide=separator_slide,
+        title="Annexes",
+        subtitle="Analyses complémentaires, historique des fonds et flux financiers détaillés",
+        contract_badge=contract_badge,
         client_name=client_name,
-        contrat_num=contrat_num,
-        enveloppe=enveloppe,
-        partenaire=partenaire,
-        valorisation_str=valorisation_str,
-        date_val_str=date_val_str,
-        date_ouv_str=date_ouv_str,
         slide_index=slide_idx,
         total_slides=total_slides,
     )
 
     # =========================================================================
-    # --- ANNEXES (placées après la 4ème de couverture) ---
+    # --- PARTIE ANNEXES ---
     # =========================================================================
 
-    # --- Annexe 1 : Waterfall de la performance du contrat (avec IR 30% si PER) ---
+    # --- Annexe : Évolution dans le temps des fonds du contrat (base 100) (1 slide globale) ---
+    slide_funds = _new_slide("Annexe — Évolution dans le temps des fonds du contrat (base 100)", is_annex=True)
+    img_all_funds = convert_figure_to_png_bytes(
+        fig_all_funds, width_px=1320, height_px=620, scale=2, legend_bottom=True
+    )
+    _add_picture_fit(
+        slide_funds,
+        img_all_funds,
+        left_in=0.45,
+        top_in=1.32,
+        max_width_in=12.43,
+        max_height_in=5.65,
+        aspect_ratio=1320 / 620,
+        empty_message="Aucun historique de performance disponible pour les fonds de ce contrat.",
+    )
+
+    # --- Annexes : Un slide par catégorie d'actifs simplifiée ---
+    for asset_class, fig_cls in class_slides:
+        slide_cls = _new_slide(f"Annexe — Évolution des fonds — {asset_class} (base 100)", is_annex=True)
+        img_cls = convert_figure_to_png_bytes(
+            fig_cls, width_px=1320, height_px=620, scale=2, legend_bottom=True
+        )
+        _add_picture_fit(
+            slide_cls,
+            img_cls,
+            left_in=0.45,
+            top_in=1.32,
+            max_width_in=12.43,
+            max_height_in=5.65,
+            aspect_ratio=1320 / 620,
+            empty_message=f"Aucun historique disponible pour la classe {asset_class}.",
+        )
+
+    # --- Annexe : Plan de projection de la valorisation (Horizon 8 ans) ---
+    if fig_projection_8ans is not None:
+        slide_proj_8 = _new_slide("Annexe — Plan de projection de la valorisation (Horizon 8 ans)", is_annex=True)
+        img_proj_8 = convert_figure_to_png_bytes(
+            fig_projection_8ans, width_px=1320, height_px=620, scale=2, legend_bottom=True
+        )
+        _add_picture_fit(
+            slide_proj_8,
+            img_proj_8,
+            left_in=0.45,
+            top_in=1.32,
+            max_width_in=12.43,
+            max_height_in=5.65,
+            aspect_ratio=1320 / 620,
+            empty_message="Graphique de projection à 8 ans indisponible.",
+        )
+
+    # --- Annexe : Tableaux détaillés des versements et arbitrages ---
+    slide_ops = _new_slide("Annexe — Détail des versements et des arbitrages", is_annex=True)
+    _add_operations_slide(slide_ops, tri_analysis=tri_analysis)
+
+    # --- Annexe : Waterfall de la performance du contrat (avec IR 30% si PER) ---
     wf_title = (
         "Annexe — Performance du contrat (avec réduction d'IR à 30 %)"
         if is_per
@@ -1875,7 +2010,7 @@ def generate_contract_pptx(
         empty_message="Waterfall de performance du contrat indisponible.",
     )
 
-    # --- Annexe 2 : Waterfall de l'allocation ---
+    # --- Annexe : Waterfall de l'allocation ---
     slide_wf_a = _new_slide("Annexe — Waterfall de l'allocation par support", is_annex=True)
     img_wf_alloc = convert_figure_to_png_bytes(
         fig_waterfall_allocation, width_px=1320, height_px=620, scale=2
@@ -1891,9 +2026,24 @@ def generate_contract_pptx(
         empty_message="Waterfall de l'allocation indisponible (aucun support UC détecté).",
     )
 
-    # --- Annexe 3 : Tableaux détaillés des versements et arbitrages ---
-    slide_ops = _new_slide("Annexe — Détail des versements et des arbitrages", is_annex=True)
-    _add_operations_slide(slide_ops, tri_analysis=tri_analysis)
+    # =========================================================================
+    # --- 4ÈME DE COUVERTURE (CLÔTURE DE LA PRÉSENTATION) ---
+    # =========================================================================
+
+    slide_idx += 1
+    back_cover_slide = prs.slides.add_slide(blank_layout)
+    _add_back_cover_slide(
+        slide=back_cover_slide,
+        client_name=client_name,
+        contrat_num=contrat_num,
+        enveloppe=enveloppe,
+        partenaire=partenaire,
+        valorisation_str=valorisation_str,
+        date_val_str=date_val_str,
+        date_ouv_str=date_ouv_str,
+        slide_index=slide_idx,
+        total_slides=total_slides,
+    )
 
     output = io.BytesIO()
     prs.save(output)
@@ -2096,7 +2246,7 @@ def generate_batch_contract_pptx(
                     "contrat_num": contrat_num,
                     "enveloppe": target["enveloppe"],
                     "is_per": ctx["is_per"],
-                    "slides_count": 9 + len(ctx["figures_by_class"]) + has_proj,
+                    "slides_count": 10 + len(ctx["figures_by_class"]) + has_proj,
                     "file_name": unique_file_name,
                     "archive_path": archive_path,
                     "data": pptx_bytes,

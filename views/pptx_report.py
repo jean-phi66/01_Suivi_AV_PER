@@ -10,18 +10,10 @@ from streamlit import session_state as ss
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pptx_report_generator as _pptx_report_generator
+_pptx_report_generator = importlib.reload(_pptx_report_generator)
 
-if not all(
-    hasattr(_pptx_report_generator, _sym)
-    for _sym in (
-        "build_batch_pptx_targets",
-        "build_contract_pptx_context",
-        "generate_batch_contract_pptx",
-        "generate_contract_pptx",
-        "sanitize_pptx_filename",
-    )
-):
-    _pptx_report_generator = importlib.reload(_pptx_report_generator)
+import reporting_helpers as _reporting_helpers
+_reporting_helpers = importlib.reload(_reporting_helpers)
 
 build_batch_pptx_targets = _pptx_report_generator.build_batch_pptx_targets
 build_contract_pptx_context = _pptx_report_generator.build_contract_pptx_context
@@ -236,53 +228,61 @@ if export_mode == "Contrat unique":
     classes_count = len(ctx["figures_by_class"])
     has_proj_8 = 1 if ctx.get("fig_projection_8ans") is not None else 0
     has_proj_2 = 1 if ctx.get("fig_projection_2ans") is not None else 0
-    total_slides = 9 + classes_count + has_proj_8 + has_proj_2
+    total_slides = 10 + classes_count + has_proj_8 + has_proj_2
 
     curr_n = 4
+    proj_2_desc = ""
+    if has_proj_2:
+        curr_n += 1
+        proj_2_desc = f"{curr_n}) Plan de projection à 2 ans, "
+
+    curr_n += 1
+    sep_num = curr_n
+
+    curr_n += 1
+    funds_all_num = curr_n
+
     if classes_count:
-        cls_range = f"5-{4 + classes_count}" if classes_count > 1 else "5"
-        cls_desc = f"{cls_range}) Évolution par classe d'actifs ({classes_count} classe(s)), "
-        curr_n = 4 + classes_count
+        cls_range = f"{curr_n + 1}-{curr_n + classes_count}" if classes_count > 1 else f"{curr_n + 1}"
+        cls_desc = f"{cls_range}) Évolution par catégorie d'actifs ({classes_count} classe(s)), "
+        curr_n += classes_count
     else:
         cls_desc = ""
 
-    curr_n += 1
-    vl_slide_num = curr_n
-
-    proj_desc_items = []
+    proj_8_desc = ""
     if has_proj_8:
         curr_n += 1
-        proj_desc_items.append(f"{curr_n}) Plan de projection à long terme (8 ans)")
-    if has_proj_2:
-        curr_n += 1
-        proj_desc_items.append(f"{curr_n}) Plan de projection à court terme (2 ans)")
-    proj_desc = f"{', '.join(proj_desc_items)}, " if proj_desc_items else ""
+        proj_8_desc = f"{curr_n}) Plan de projection à 8 ans, "
 
     curr_n += 1
-    back_cover_num = curr_n
+    ops_num = curr_n
     curr_n += 1
     wf_c_num = curr_n
     curr_n += 1
     wf_a_num = curr_n
     curr_n += 1
-    ops_num = curr_n
+    back_cover_num = curr_n
 
     st.info(
-        f"Le document contiendra **{total_slides} slides** : "
+        f"Le document contiendra **{total_slides} slides** (version standard par défaut) : "
         f"1) Page de garde ({'PER' if ctx['is_per'] else 'Assurance-vie'}), "
-        f"2) Détail des lignes du portefeuille, "
-        f"3) Composition (classes simplifiées & supports), "
-        f"4) Évolution des fonds (base 100), "
+        f"2) Composition du portefeuille (donuts), "
+        f"3) Détail des lignes du portefeuille, "
+        f"4) Évolution temporelle de la VL, "
+        f"{proj_2_desc}"
+        f"{sep_num}) Séparateur « Annexes », "
+        f"{funds_all_num}) Annexe : Évolution des fonds (base 100), "
         f"{cls_desc}"
-        f"{vl_slide_num}) Évolution temporelle de la VL, "
-        f"{proj_desc}"
-        f"{back_cover_num}) 4ème de couverture (Cabinet & Clôture), "
+        f"{proj_8_desc}"
+        f"{ops_num}) Annexe : Détail des versements et arbitrages, "
         f"{wf_c_num}) Annexe : Waterfall contrat{' (avec IR 30 %)' if ctx['is_per'] else ''}, "
         f"{wf_a_num}) Annexe : Waterfall allocation, "
-        f"{ops_num}) Annexe : Détail des versements et arbitrages."
+        f"{back_cover_num}) 4ème de couverture (Clôture)."
     )
 
+    PPTX_LAYOUT_VERSION = "2026-11-14_v4_standard_15slides"
     state_signature = (
+        PPTX_LAYOUT_VERSION,
         str(selected_client),
         str(selected_contrat),
         preferred_source,
@@ -328,17 +328,27 @@ if export_mode == "Contrat unique":
 
     with st.expander("Aperçu des graphiques et tableaux du bilan", expanded=False):
         tab_names = [
-            "1. Lignes portefeuille",
-            "2. Composition",
-            "3. Fonds (global & classes)",
-            "4. Évolution VL",
-            "5. Projections",
-            "6. 4ème de couverture",
-            "7. Annexes : Waterfalls",
-            "8. Annexes : Opérations",
+            "1. Composition",
+            "2. Lignes portefeuille",
+            "3. Évolution VL",
+            "4. Projection 2 ans",
+            "5. Séparateur Annexes",
+            "6. Fonds (global & classes)",
+            "7. Projection 8 ans",
+            "8. Opérations (flux)",
+            "9. Waterfalls",
+            "10. 4ème de couverture",
         ]
-        t0, t1, t2, t3, t4, t5, t6, t7 = st.tabs(tab_names)
+        t0, t1, t2, t3, t4, t5, t6, t7, t8, t9 = st.tabs(tab_names)
         with t0:
+            c_left, c_right = st.columns(2)
+            with c_left:
+                if ctx["fig_typologie_simplifiee"] is not None:
+                    st.plotly_chart(ctx["fig_typologie_simplifiee"], use_container_width=True)
+            with c_right:
+                if ctx["fig_supports"] is not None:
+                    st.plotly_chart(ctx["fig_supports"], use_container_width=True)
+        with t1:
             df_lines_prev, _, _, meta_prev = prepare_portfolio_lines_table(ctx.get("df_allocations_client"))
             if not df_lines_prev.empty:
                 def _hl_prev_row(row):
@@ -374,66 +384,40 @@ if export_mode == "Contrat unique":
                 )
             else:
                 st.info("Aucune ligne de portefeuille disponible pour ce contrat.")
-        with t1:
-            c_left, c_right = st.columns(2)
-            with c_left:
-                if ctx["fig_typologie_simplifiee"] is not None:
-                    st.plotly_chart(ctx["fig_typologie_simplifiee"], use_container_width=True)
-            with c_right:
-                if ctx["fig_supports"] is not None:
-                    st.plotly_chart(ctx["fig_supports"], use_container_width=True)
         with t2:
+            if ctx["fig_evol"] is not None:
+                st.plotly_chart(ctx["fig_evol"], use_container_width=True)
+            else:
+                st.info("Historique de valorisation indisponible pour ce contrat.")
+        with t3:
+            if ctx.get("fig_projection_2ans") is not None:
+                st.subheader("Plan de projection à court terme (Horizon 2 ans)")
+                st.plotly_chart(ctx["fig_projection_2ans"], use_container_width=True)
+            else:
+                st.info("Aucun plan de projection à 2 ans disponible pour ce contrat.")
+        with t4:
+            st.markdown("### Séparateur — Annexes techniques")
+            st.info(
+                "**SECTION COMPLÉMENTAIRE**\n\n"
+                "# Annexes\n\n"
+                "**Analyses complémentaires, historique des fonds et flux financiers détaillés**\n\n"
+                f"{df_contrat_selected.get('Enveloppe', pd.Series(['N/A'])).iloc[0]}  •  "
+                f"{df_contrat_selected.get('Partenaire', pd.Series(['N/A'])).iloc[0]}  •  "
+                f"N° {selected_contrat}   |   Titulaire : {selected_client}"
+            )
+        with t5:
             if ctx["fig_all_funds"] is not None:
                 st.plotly_chart(ctx["fig_all_funds"], use_container_width=True)
             else:
                 st.info("Aucun historique de performance disponible pour les fonds du contrat.")
             for _, fig_cls in ctx["figures_by_class"]:
                 st.plotly_chart(fig_cls, use_container_width=True)
-        with t3:
-            if ctx["fig_evol"] is not None:
-                st.plotly_chart(ctx["fig_evol"], use_container_width=True)
-            else:
-                st.info("Historique de valorisation indisponible pour ce contrat.")
-        with t4:
-            has_p = False
-            if ctx.get("fig_projection_8ans") is not None:
-                has_p = True
-                st.subheader("Plan de projection à long terme (8 ans)")
-                st.plotly_chart(ctx["fig_projection_8ans"], use_container_width=True)
-            if ctx.get("fig_projection_2ans") is not None:
-                has_p = True
-                st.subheader("Plan de projection à court terme (2 ans)")
-                st.plotly_chart(ctx["fig_projection_2ans"], use_container_width=True)
-            if not has_p:
-                st.info("Aucun plan de projection disponible pour ce contrat.")
-        with t5:
-            st.markdown("### 4ème de couverture — Clôture du bilan")
-            c_card1, c_card2 = st.columns(2)
-            with c_card1:
-                st.info(
-                    "**VOTRE CABINET CONSEIL**\n\n"
-                    "### Avenir-Patrimoine\n\n"
-                    "**Jean-Philippe NAVARRO**\n\n"
-                    "*Conseil en Gestion de Patrimoine*"
-                )
-            with c_card2:
-                st.success(
-                    f"**RÉFÉRENCES DU DOSSIER**\n\n"
-                    f"### {selected_client}\n\n"
-                    f"**{df_contrat_selected.get('Enveloppe', pd.Series(['N/A'])).iloc[0]}  •  N° {selected_contrat}**\n\n"
-                    f"Partenaire : {df_contrat_selected.get('Partenaire', pd.Series(['N/A'])).iloc[0]}"
-                )
-            st.caption(
-                "Avertissement & Mentions réglementaires : Le bilan patrimonial est un document confidentiel remis au client. "
-                "Les performances passées ne préjugent pas des performances futures. Risque de perte en capital sur les UC."
-            )
         with t6:
-            if ctx["fig_waterfall_contract"] is not None:
-                st.subheader("Annexe : Waterfall de performance globale du contrat")
-                st.plotly_chart(ctx["fig_waterfall_contract"], use_container_width=True)
-            if ctx["fig_waterfall_allocation"] is not None:
-                st.subheader("Annexe : Waterfall de l'allocation par support")
-                st.plotly_chart(ctx["fig_waterfall_allocation"], use_container_width=True)
+            if ctx.get("fig_projection_8ans") is not None:
+                st.subheader("Annexe : Plan de projection à long terme (Horizon 8 ans)")
+                st.plotly_chart(ctx["fig_projection_8ans"], use_container_width=True)
+            else:
+                st.info("Aucun plan de projection à 8 ans disponible pour ce contrat.")
         with t7:
             ops_meta = ctx.get("ops_meta") or {}
             st.subheader("Annexe : Détail des opérations")
@@ -454,6 +438,34 @@ if export_mode == "Contrat unique":
                     st.info("Aucun arbitrage extrait du relevé TRI.")
             if ops_meta.get("assumption_note"):
                 st.caption(ops_meta["assumption_note"])
+        with t8:
+            if ctx["fig_waterfall_contract"] is not None:
+                st.subheader("Annexe : Waterfall de performance globale du contrat")
+                st.plotly_chart(ctx["fig_waterfall_contract"], use_container_width=True)
+            if ctx["fig_waterfall_allocation"] is not None:
+                st.subheader("Annexe : Waterfall de l'allocation par support")
+                st.plotly_chart(ctx["fig_waterfall_allocation"], use_container_width=True)
+        with t9:
+            st.markdown("### 4ème de couverture — Clôture du bilan")
+            c_card1, c_card2 = st.columns(2)
+            with c_card1:
+                st.info(
+                    "**VOTRE CABINET CONSEIL**\n\n"
+                    "### Avenir-Patrimoine\n\n"
+                    "**Jean-Philippe NAVARRO**\n\n"
+                    "*Conseil en Gestion de Patrimoine*"
+                )
+            with c_card2:
+                st.success(
+                    f"**RÉFÉRENCES DU DOSSIER**\n\n"
+                    f"### {selected_client}\n\n"
+                    f"**{df_contrat_selected.get('Enveloppe', pd.Series(['N/A'])).iloc[0]}  •  N° {selected_contrat}**\n\n"
+                    f"Partenaire : {df_contrat_selected.get('Partenaire', pd.Series(['N/A'])).iloc[0]}"
+                )
+            st.caption(
+                "Avertissement & Mentions réglementaires : Le bilan patrimonial est un document confidentiel remis au client. "
+                "Les performances passées ne préjugent pas des performances futures. Risque de perte en capital sur les UC."
+            )
 
 else:
     # --- Mode 2 : Multi-clients (un PPTX par contrat de chaque client sélectionné) ---
@@ -528,7 +540,9 @@ else:
         key="pptx_batch_group_folders",
     )
 
+    PPTX_LAYOUT_VERSION = "2026-11-14_v4_standard_15slides"
     batch_signature = (
+        PPTX_LAYOUT_VERSION,
         tuple(selected_clients),
         preferred_source_batch,
         str(date_debut_batch),
